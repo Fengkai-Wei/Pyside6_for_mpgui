@@ -1,11 +1,17 @@
 import sys
-
+import numpy as np
 
 from PySide6.QtWidgets import (QApplication, QMainWindow, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QWidget, QListWidget, QListWidgetItem, QMenu, QMessageBox, QDialog, QFormLayout, QLineEdit, QComboBox, QSlider, QDoubleSpinBox, QTabWidget, QGridLayout)
 from PySide6.QtGui import QAction
 from PySide6.QtCore import Qt
+
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+mpl.rcParams['savefig.pad_inches'] = 0
+
+from vispy import scene
+from vispy.scene import visuals
 
 class CustomEditDialog(QDialog):
     def __init__(self, item_text, parent=None):
@@ -194,6 +200,9 @@ class PlotWidget(QWidget):
         # Create a matplotlib figure and axis
         self.figure, self.ax = plt.subplots()
 
+        # Ensure a tight layout
+        self.figure.tight_layout()
+
         # Create a FigureCanvas object
         self.canvas = FigureCanvas(self.figure)
 
@@ -204,20 +213,51 @@ class PlotWidget(QWidget):
         # Add the canvas to the layout
         self.layout.addWidget(self.canvas)
 
+
         # Plot some example data
-        self.plot()
+        #self.plot()
+
+        # Remove all paddings
+        self.figure.subplots_adjust(top=1,
+                            bottom=0,
+                            left=0,
+                            right=1)
 
     def plot(self, scale=1):
         # Clear previous plot
         self.ax.clear()
-
+        self.ax.grid(color=(0,0,0,0.1), linestyle='--')
         # Example plot with dynamic scaling
         x = [1, 2, 3, 4]
         y = [1, 4, 9, 16]
         self.ax.plot(x, [i * scale for i in y], 'r-')
-        self.ax.set_xlabel('X Axis')
-        self.ax.set_ylabel('Y Axis')
-        self.ax.set_title('Interactive Plot')
+        # self.ax.set_xlabel('X Axis')
+        # self.ax.set_ylabel('Y Axis')
+        self.ax.set_xlim([-6, 6])
+        self.ax.set_xticks(np.arange(-6, 6, 1))
+        self.ax.set_ylim([-16*scale, 16*scale])
+        self.ax.set_yticks(np.arange(-16*scale, 16*scale, 16))
+
+
+        self.ax.spines['left'].set_position('center')
+        self.ax.spines['bottom'].set_position('center')
+
+        # Eliminate upper and right axes
+        self.ax.spines['right'].set_color('none')
+        self.ax.spines['top'].set_color('none')
+
+        # Show ticks in the left and lower axes only
+        self.ax.xaxis.set_ticks_position('bottom')
+        self.ax.yaxis.set_ticks_position('left')
+
+
+        # self.ax.set_title('Interactive Plot')
+
+        # Hide x-axis
+        # self.ax.get_xaxis().set_visible(False)
+
+        # Hide y-axis 
+        # self.ax.get_yaxis().set_visible(False)
 
         # Draw the plot
         self.canvas.draw()
@@ -250,12 +290,50 @@ class SliderWidget(QWidget):
         scale = self.slider.value()
         self.plot_widget.plot(scale=scale)
 
+class VispyPlotWidget(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        # Create a canvas
+        self.canvas = scene.SceneCanvas(keys='interactive', show=True)
+        
+        # Create a view
+        self.view = self.canvas.central_widget.add_view()
+        
+        # Create 3D axis
+        self.view.camera = 'turntable'
+        axis = visuals.XYZAxis(parent=self.view.scene)
+        
+        # Add data
+        # self.plot()
+
+        # Create a QVBoxLayout for this widget
+        self.layout = QVBoxLayout(self)
+        self.setLayout(self.layout)
+        
+        # Add the canvas to the layout
+        self.layout.addWidget(self.canvas.native)
+
+    def plot(self):
+        # Create some example data
+        import numpy as np
+        data = np.random.normal(size=(100, 3), scale=0.2)
+        
+        # Create scatter plot
+        scatter = visuals.Markers()
+        scatter.set_data(data, edge_color=None, face_color=(1, 1, 1, 0.5), size=5)
+        
+        # Add scatter plot to the view
+        self.view.add(scatter)
+
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
         self.setWindowTitle("My Application")
-        self.setGeometry(100, 100, 800, 600)  # Adjust window size for layout
+        self.setGeometry(200, 200, 800, 600)  # Adjust window size for layout
 
         # Create a central widget
         central_widget = QWidget()
@@ -274,16 +352,49 @@ class MainWindow(QMainWindow):
         self.tab_widget.addTab(self.tab2, "Tab 2")
         self.tab_widget.addTab(self.tab3, "Tab 3")
 
-        # Create and add the canvas grid widget
-        self.plot_widget = PlotWidget()
-
-        # Add the tab widget and canvas grid to the central layout
+        # Add the tab widget to the central layout
         self.central_layout.addWidget(self.tab_widget)
-        self.central_layout.addWidget(self.plot_widget)
+
+        # Create grid layout for 3 viewing and 3d plot
+        self.plot_grid = QGridLayout()
+
+        # Create 3 viewings canvas widget
+        self.plot_widget_0 = PlotWidget()
+        self.plot_widget_1 = PlotWidget()
+        self.plot_widget_2 = PlotWidget()
+
+        # Create and add the vispy plot widget
+        self.vispy_plot_widget = VispyPlotWidget()
+        
+
+        # Add 3 viewings plot and 3d plot to the grid layout
+        self.plot_grid.addWidget(self.plot_widget_0,0,0)
+        self.plot_grid.addWidget(self.plot_widget_1,1,0)
+        self.plot_grid.addWidget(self.plot_widget_2,1,1)
+        self.plot_grid.addWidget(self.vispy_plot_widget,0,1)
+
+        # Set grid resizing behaviour
+        self.plot_grid.setColumnStretch(0, 1)
+        self.plot_grid.setColumnStretch(1, 1)
+        self.plot_grid.setRowStretch(0, 1)
+        self.plot_grid.setRowStretch(1, 1)
+
+        # Minimize the spacing between widgets
+        self.plot_grid.setSpacing(0)
+        #self.plot_grid.setHorizontalSpacing(0)
+        #self.plot_grid.setVerticalSpacing(0)
+        
+        # Minimize the margins around the layout
+        self.plot_grid.setContentsMargins(0, 0, 0, 0)
+
+        # Add grid layout to central layout
+        self.central_layout.addLayout(self.plot_grid)
 
         # Create and add the slider widget
-        self.slider_widget = SliderWidget(self.plot_widget)
+        self.slider_widget = SliderWidget(self.plot_widget_0)
         self.central_layout.addWidget(self.slider_widget)
+
+
 
         # Create and add widgets
         self.create_label()
@@ -294,6 +405,8 @@ class MainWindow(QMainWindow):
         # Create a label and set its text
         label = QLabel("This is a GUI for meep")
         self.central_layout.addWidget(label)  # Add the label to the central layout
+
+
 
 def main():
     # Create the application object
