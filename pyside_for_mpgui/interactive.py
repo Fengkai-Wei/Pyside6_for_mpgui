@@ -1,61 +1,56 @@
 import sys
-import time
+from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QGridLayout, QLabel, QSizePolicy
+from PySide6.QtCore import Qt
 
-import numpy as np
-
-from matplotlib.backends.backend_qtagg import FigureCanvas
-from matplotlib.backends.backend_qtagg import \
-    NavigationToolbar2QT as NavigationToolbar
-from matplotlib.backends.qt_compat import QtWidgets
-from matplotlib.figure import Figure
-
-
-class ApplicationWindow(QtWidgets.QMainWindow):
+class GridWidget(QWidget):
     def __init__(self):
         super().__init__()
-        self._main = QtWidgets.QWidget()
-        self.setCentralWidget(self._main)
-        layout = QtWidgets.QVBoxLayout(self._main)
 
-        static_canvas = FigureCanvas(Figure(figsize=(5, 3)))
-        # Ideally one would use self.addToolBar here, but it is slightly
-        # incompatible between PyQt6 and other bindings, so we just add the
-        # toolbar as a plain widget instead.
-        layout.addWidget(NavigationToolbar(static_canvas, self))
-        layout.addWidget(static_canvas)
+        # Create a QGridLayout
+        self.grid_layout = QGridLayout()
+        self.setLayout(self.grid_layout)
 
-        dynamic_canvas = FigureCanvas(Figure(figsize=(5, 3)))
-        layout.addWidget(dynamic_canvas)
-        layout.addWidget(NavigationToolbar(dynamic_canvas, self))
+        # Add some widgets to the grid layout
+        self.add_custom_label('Cell 1', 0, 0)
+        self.add_custom_label('Cell 2', 0, 1)
+        self.add_custom_label('Cell 3', 1, 0)
+        self.add_custom_label('Cell 4', 1, 1)
 
-        self._static_ax = static_canvas.figure.subplots()
-        t = np.linspace(0, 10, 501)
-        self._static_ax.plot(t, np.tan(t), ".")
+        # Minimize the spacing between widgets
+        self.grid_layout.setSpacing(0)
+        
+        # Minimize the margins around the layout
+        self.grid_layout.setContentsMargins(0, 0, 0, 0)
 
-        self._dynamic_ax = dynamic_canvas.figure.subplots()
-        t = np.linspace(0, 10, 101)
-        # Set up a Line2D.
-        self._line, = self._dynamic_ax.plot(t, np.sin(t + time.time()))
-        self._timer = dynamic_canvas.new_timer(50)
-        self._timer.add_callback(self._update_canvas)
-        self._timer.start()
+    def add_custom_label(self, text, row, column):
+        label = QLabel(text)
+        label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        label.setAlignment(Qt.AlignCenter)
+        # Remove margins for each QLabel
+        label.setContentsMargins(0, 0, 0, 0)
+        self.grid_layout.addWidget(label, row, column)
 
-    def _update_canvas(self):
-        t = np.linspace(0, 10, 101)
-        # Shift the sinusoid as a function of time.
-        self._line.set_data(t, np.sin(t + time.time()))
-        self._line.figure.canvas.draw()
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
 
+        self.setWindowTitle('Grid Layout Example with Fixed Ratio')
+        
+
+        # Create a central widget and set it as the central widget for the main window
+        self.central_widget = GridWidget()
+        self.setCentralWidget(self.central_widget)
+
+def main():
+    # Create the application object
+    app = QApplication(sys.argv)
+
+    # Create and show the main window
+    window = MainWindow()
+    window.show()
+
+    # Run the application event loop
+    sys.exit(app.exec())
 
 if __name__ == "__main__":
-    # Check whether there is already a running QApplication (e.g., if running
-    # from an IDE).
-    qapp = QtWidgets.QApplication.instance()
-    if not qapp:
-        qapp = QtWidgets.QApplication(sys.argv)
-
-    app = ApplicationWindow()
-    app.show()
-    app.activateWindow()
-    app.raise_()
-    qapp.exec()
+    main()
