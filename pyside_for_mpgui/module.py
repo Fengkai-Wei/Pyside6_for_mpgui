@@ -1,8 +1,8 @@
 import sys
 import numpy as np
 
-from PySide6.QtWidgets import (QApplication, QMainWindow, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QWidget, QListWidget, QListWidgetItem, QMenu, QMessageBox, QDialog, QFormLayout, QLineEdit, QComboBox, QSlider, QDoubleSpinBox, QTabWidget, QGridLayout)
-from PySide6.QtGui import QAction
+from PySide6.QtWidgets import (QSizePolicy, QMainWindow, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QWidget, QListWidget, QListWidgetItem, QMenu, QMessageBox, QDialog, QFormLayout, QLineEdit, QComboBox, QSlider, QDoubleSpinBox, QTabWidget, QGridLayout)
+from PySide6.QtGui import QAction, QFontMetrics
 from PySide6.QtCore import Qt
 
 import matplotlib.pyplot as plt
@@ -12,6 +12,72 @@ mpl.rcParams['savefig.pad_inches'] = 0
 
 from vispy import scene
 from vispy.scene import visuals
+
+import global_vars
+from var_manage import add_var, rm_var
+global_vars.init()
+from  global_vars import var_dict
+
+class CustomMsgBox(QMessageBox):
+    def __init__(self, parent = None):
+        self.parent = parent
+    
+    def show_msg(self,title, message, icon=QMessageBox.Information,buttons=QMessageBox.Ok):
+        # Create the message box and set its parent
+        msg_box = QMessageBox(self.parent)
+        msg_box.setWindowTitle(title)
+        msg_box.setText(message)
+        msg_box.setIcon(icon)
+        msg_box.setStandardButtons(buttons)
+        msg_box.exec()  # Show the message box modally
+
+class AddItemDialog(QDialog):
+    def __init__(self, type,combo_list,parent=None):
+        super().__init__(parent)
+        self.parent = parent
+        self.setWindowTitle('Add Item')
+        self.setGeometry(100, 100, 300, 100)
+        self.combo_list = combo_list
+        self.type = type
+
+        # Create layout
+        layout = QFormLayout(self)
+
+        # Create input for name of new item
+        self.name_input = QLineEdit()
+        self.name_input.setText('New Item')
+        layout.addRow('Name:', self.name_input)
+        self.name_input.textChanged.connect(self.on_name_changed)
+
+        # Create combo box for item type
+        self.type_combo = QComboBox()
+        self.type_combo.addItems(self.combo_list)
+        self.type_combo.setMaxVisibleItems(15)
+        self.type_combo.setStyleSheet("QComboBox { combobox-popup: 0; }");
+        self.type_combo.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
+        layout.addRow(f'{self.type}:',self.type_combo)
+        
+        self.type_combo.currentTextChanged.connect(self.on_combo_box_changed)
+
+        # Create buttons
+        self.button_box = QPushButton("OK")
+        self.button_box.clicked.connect(self.accept)
+        layout.addRow(self.button_box)
+
+        self.setLayout(layout)
+
+
+    def on_name_changed(self,new_name):
+        print(f"Name input changed: {new_name}")
+    def on_combo_box_changed(self, new_text):
+        print(f"Name input changed: {new_text}")
+    def get_values(self):
+        return {'name':self.name_input.text(),
+                'type':self.type_combo.currentText()}
+
+
+
 
 class CustomEditDialog(QDialog):
     def __init__(self, item_text, parent=None):
@@ -112,12 +178,28 @@ class CustomListWidget(QWidget):
         self.list_widget.model().rowsRemoved.connect(self.print_list_items)
         self.list_widget.model().rowsInserted.connect(self.print_list_items)
 
-    def add_item(self, item_text=None):
-        # Add a new item to the list
-        if not item_text:
-            item_text = f"Item {self.list_widget.count() + 1}"
-        self.list_widget.addItem(item_text)
-        self.print_list_items()
+    def add_item(self):
+        dialog = AddItemDialog(type = 'Material', combo_list = var_dict['material'].keys(),parent = self)
+        if dialog.exec():
+            values = dialog.get_values()
+            print(f"Edited values: {values}")
+            current_list = self.print_list_items()
+
+            # Get current list of item
+            if values['name'] in current_list:
+
+                self.msg =  CustomMsgBox(self)
+                self.msg.show_msg(
+                    title = 'Invalid Name',
+                    message = f"{values['name']} is already named",
+                    icon = QMessageBox.Warning,
+                    buttons = QMessageBox.Ok
+                )
+            else:
+                # Add a new item to the list
+                self.list_widget.addItem(values['name'])     
+        
+
 
     def show_context_menu(self, pos):
         # Create and show the context menu
@@ -149,7 +231,25 @@ class CustomListWidget(QWidget):
             if dialog.exec():
                 values = dialog.get_values()
                 print(f"Edited values: {values}")
-                self.current_item.setText(values['text'])
+                if self.current_item.text() == values['text']:
+                    pass
+                else:
+                    # Get current list of item
+                    current_list = self.print_list_items()
+
+                    # Check if duplicate
+                    if values['text'] in current_list:
+
+                        self.msg =  CustomMsgBox(self)
+                        self.msg.show_msg(
+                            title = 'Invalid Name',
+                            message = f"{values['text']} is already named",
+                            icon = QMessageBox.Warning,
+                            buttons = QMessageBox.Ok
+                        )
+                        
+                    else:
+                        self.current_item.setText(values['text'])
 
     def delete_item(self):
         # Permanently delete the item
@@ -167,9 +267,12 @@ class CustomListWidget(QWidget):
 
     def print_list_items(self):
         # Print all items in the list
+        list_items = []
         print("Current list items:")
         for index in range(self.list_widget.count()):
-            print(self.list_widget.item(index).text())
+            list_items.append(self.list_widget.item(index).text())
+        print(list_items)
+        return list_items
 
 class CustomButton(QWidget):
     def __init__(self, label="Add", parent=None):
@@ -408,7 +511,7 @@ class MainWindow(QMainWindow):
 
 
 
-def main():
+"""def main():
     # Create the application object
     app = QApplication(sys.argv)
 
@@ -421,3 +524,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+"""
