@@ -32,20 +32,20 @@ class CustomMsgBox(QMessageBox):
         msg_box.exec()  # Show the message box modally
 
 class AddItemDialog(QDialog):
-    def __init__(self, type,combo_list,parent=None):
+    def __init__(self, type ,combo_list,parent=None):
         super().__init__(parent)
         self.parent = parent
-        self.setWindowTitle('Add Item')
         self.setGeometry(100, 100, 300, 100)
         self.combo_list = combo_list
         self.type = type
+        self.setWindowTitle(f'Add {self.type}')
 
         # Create layout
         layout = QFormLayout(self)
 
         # Create input for name of new item
         self.name_input = QLineEdit()
-        self.name_input.setText('New Item')
+        self.name_input.setText(f'New {self.type}')
         layout.addRow('Name:', self.name_input)
         self.name_input.textChanged.connect(self.on_name_changed)
 
@@ -145,11 +145,13 @@ class CustomEditDialog(QDialog):
         print(f"Combo box changed: {new_text}")
 
 class CustomListWidget(QWidget):
-    def __init__(self, items=None, parent=None):
+    def __init__(self, add_type = 'Structure', add_combo=var_dict['structure'] ,items=None, parent=None):
         super().__init__(parent)
         if items is None:
             items = ["Item 1", "Item 2", "Item 3", "Item 4", "Item 5"]
         self.list_items = items
+        self.add_combo = add_combo
+        self.add_type = add_type
         self.init_ui()
 
     def init_ui(self):
@@ -165,7 +167,7 @@ class CustomListWidget(QWidget):
         self.list_widget.customContextMenuRequested.connect(self.show_context_menu)
 
         # Create and configure the add button
-        self.add_button = QPushButton("Add Item")
+        self.add_button = QPushButton(f"Add {self.add_type}")
         self.add_button.clicked.connect(self.add_item)
 
         # Layout configuration
@@ -179,7 +181,7 @@ class CustomListWidget(QWidget):
         self.list_widget.model().rowsInserted.connect(self.print_list_items)
 
     def add_item(self):
-        dialog = AddItemDialog(type = 'Material', combo_list = var_dict['material'].keys(),parent = self)
+        dialog = AddItemDialog(type = self.add_type, combo_list = self.add_combo.keys(),parent = self)
         if dialog.exec():
             values = dialog.get_values()
             print(f"Edited values: {values}")
@@ -273,6 +275,8 @@ class CustomListWidget(QWidget):
             list_items.append(self.list_widget.item(index).text())
         print(list_items)
         return list_items
+
+
 
 class CustomButton(QWidget):
     def __init__(self, label="Add", parent=None):
@@ -448,7 +452,7 @@ class MainWindow(QMainWindow):
 
         # Create and add tabs
         self.tab1 = CustomListWidget()
-        self.tab2 = CustomListWidget()
+        self.tab2 = CustomListWidget(add_type= 'Source', add_combo= var_dict['sources'])
         self.tab3 = CustomListWidget()
 
         self.tab_widget.addTab(self.tab1, "Tab 1")

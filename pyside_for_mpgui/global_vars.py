@@ -1,6 +1,6 @@
 import meep as mp
 from meep.materials import SiO2,cSi,aSi,ITO,Al2O3,GaAs,AlAs,AlN,BK7,Si3N4,Ge,InP,GaN,CdTe,LiNbO3,BaB2O4,CaWO4,CaCO3,Y2O3,YAG,PMMA,PC,PS,CLS,Ag,Au,Cu,Al,Be,Cr,Ni,Pd,Pt,Ti,W
-
+from meep.source import ContinuousSource, GaussianSource, CustomSource, EigenModeSource, GaussianBeam3DSource, GaussianBeam2DSource,GaussianBeamSource
 def init():
     global var_dict
     var_dict = {
@@ -52,7 +52,11 @@ def init():
             'Prism': mp.Prism(vertices=[mp.Vector3(-0.1,-0.1,0),mp.Vector3(-0.1,0.1,0),mp.Vector3(0.1,0.1,0),mp.Vector3(0.1,-0.1,0)], height=0.2),
                      },
         'geometry':{},
-        'sources':{},
+        'sources':{'Continuous Source': ContinuousSource,
+                   'Gaussian': GaussianSource,
+                   'Custom Source': CustomSource,
+
+        },
         'boundary':[],
         'current_sim':mp.Simulation(cell_size = mp.Vector3(2,2,2),resolution=50),
         'monitors':{},
