@@ -5,6 +5,9 @@ def dummy_src(time):
     return (np.sin(time))
 
 
+
+
+
 def init():
     global var_dict
     var_dict = {
@@ -48,7 +51,7 @@ def init():
 
         'Structure':{
             'Cylinder': mp.Cylinder(radius=0.2,height=1.0),
-            'Block': mp.Block(size=(0.2,0.2,0.2)),
+            'Block': mp.Block(size=(0.2,0.2,0.2),),
             'Sphere': mp.Sphere(radius=0.2),
             'Wedge': mp.Wedge(radius=0.2),
             'Cone': mp.Cone(radius=0.2),

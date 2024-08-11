@@ -19,6 +19,33 @@ from var_manage import add_var, rm_var
 global_vars.init()
 from  global_vars import var_dict
 
+
+
+def input_select(value):
+
+
+    if isinstance(value, float):
+        temp_widget = QDoubleSpinBox()
+        temp_widget.setFixedHeight(30)
+        return temp_widget
+    
+    elif isinstance(value, mp.Vector3):
+        temp_widget = QWidget()
+        temp_layout = QHBoxLayout(temp_widget)
+        for i in value:
+            spin_box = QDoubleSpinBox()
+            spin_box.setValue(value[i])
+            spin_box.setFixedHeight(30)
+            temp_layout.addWidget(spin_box)
+        return temp_widget
+    
+    elif isinstance(value, mp.Medium):
+        temp_widget = QComboBox()
+        temp_widget.setFixedHeight(30)
+        return temp_widget
+
+
+    pass
 class CustomMsgBox(QMessageBox):
     def __init__(self, parent = None):
         self.parent = parent
@@ -63,10 +90,23 @@ class AddItemDialog(QDialog):
 
         # Create buttons
         self.button_box = QPushButton("OK")
-        self.button_box.clicked.connect(self.accept)
+        self.button_box.clicked.connect(self.check_name)
         layout.addRow(self.button_box)
 
         self.setLayout(layout)
+    def check_name(self):
+        if self.name_input.text() in self.parent.print_list_items():
+            self.msg =  CustomMsgBox(self)
+            self.msg.show_msg(
+                title = 'Invalid Name',
+                message = f"{self.name_input.text()} is already named",
+                icon = QMessageBox.Warning,
+                buttons = QMessageBox.Ok
+            )
+        else:
+            super().accept()
+        
+
 
 
     def on_name_changed(self,new_name):
@@ -88,6 +128,8 @@ class CustomEditDialog(QDialog):
 
         # Check which dict should be edited
         self.edit_class = parent.add_type
+        # Create layout
+        layout = QFormLayout(self)
 
         if self.edit_class == 'Structure':
 
@@ -104,12 +146,24 @@ class CustomEditDialog(QDialog):
         # Store the item text
         self.item_text = item_text
 
+        
+
         # Get all attr of object
         parent.print_list_items()
         print(self.target_dict[self.item_text].__dict__)
+        attr_list = self.target_dict[self.item_text].__dict__
+        for (key,value) in attr_list.items():
+            # print(key,value)
 
-        # Create layout
-        layout = QFormLayout(self)
+            key_input = input_select(value=value)
+
+            key_label = QLabel(f'{key}')
+            layout.addRow(key_label,key_input)
+            pass
+
+
+       
+        
 
 
 
@@ -207,47 +261,34 @@ class CustomListWidget(QWidget):
         if dialog.exec():
             values = dialog.get_values()
             print(f"Edited values: {values}")
-            current_list = self.print_list_items()
 
-            # Get current list of item
-            if values['name'] in current_list:
+            # Add a new item to the list
+            self.list_widget.addItem(values['name'])
 
-                self.msg =  CustomMsgBox(self)
-                self.msg.show_msg(
-                    title = 'Invalid Name',
-                    message = f"{values['name']} is already named",
-                    icon = QMessageBox.Warning,
-                    buttons = QMessageBox.Ok
-                )
-            else:
-                # Add a new item to the list
-                self.list_widget.addItem(values['name'])
+            
 
-                
+            # Add corresponding objects to temp dict for later use
+            
+            if self.add_type == 'Structure':
 
-                # Add corresponding objects to temp dict for later use
-                
-                if self.add_type == 'Structure':
+                # if add Structure, then add a geometric object
+                temp_obj = copy.deepcopy(var_dict['Structure'][values['type']])
+                var_dict['geo'].update({values['name']:temp_obj})
 
-                    # if add Structure, then add a geometric object
-                    temp_obj = copy.deepcopy(var_dict['Structure'][values['type']])
-                    var_dict['geo'].update({values['name']:temp_obj})
+            elif self.add_type == 'Sources':
 
-                elif self.add_type == 'Sources':
+                # if add Sources, then add a geometric object
+                temp_obj = var_dict['Sources'][values['type']]
+                if temp_obj == mp.source.CustomSource:
+                    temp_srct = temp_obj(src_func= lambda t: np.random.randn())
+                else:
+                    temp_srct = temp_obj(frequency = 1/1.55)
+                temp_src = mp.Source(src = temp_srct,component=mp.Ex,center=mp.Vector3(0,0,0))
+                var_dict['src'].update({values['name']:temp_src})
 
-                    # if add Sources, then add a geometric object
-                    temp_obj = var_dict['Sources'][values['type']]
-                    if temp_obj == mp.source.CustomSource:
-                        temp_srct = temp_obj(src_func= lambda t: np.random.randn())
-                    else:
-                        temp_srct = temp_obj(frequency = 1/1.55)
-                    temp_src = mp.Source(src = temp_srct,component=mp.Ex,center=mp.Vector3(0,0,0))
-                    var_dict['src'].update({values['name']:temp_src})
-                    print(var_dict['src'])
-
-                elif self.add_type == 'Monitors':
-                    pass
-                    #
+            elif self.add_type == 'Monitors':
+                pass
+                #
 
 
 
