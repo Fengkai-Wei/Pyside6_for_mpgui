@@ -20,32 +20,10 @@ global_vars.init()
 from  global_vars import var_dict
 
 
+def reverse_dict(from_dict, find_val):
+    key = next((k for k, v in from_dict.items() if v == find_val), None)
+    return key
 
-def input_select(value):
-
-
-    if isinstance(value, float):
-        temp_widget = QDoubleSpinBox()
-        temp_widget.setFixedHeight(30)
-        return temp_widget
-    
-    elif isinstance(value, mp.Vector3):
-        temp_widget = QWidget()
-        temp_layout = QHBoxLayout(temp_widget)
-        for i in value:
-            spin_box = QDoubleSpinBox()
-            spin_box.setValue(value[i])
-            spin_box.setFixedHeight(30)
-            temp_layout.addWidget(spin_box)
-        return temp_widget
-    
-    elif isinstance(value, mp.Medium):
-        temp_widget = QComboBox()
-        temp_widget.setFixedHeight(30)
-        return temp_widget
-
-
-    pass
 class CustomMsgBox(QMessageBox):
     def __init__(self, parent = None):
         self.parent = parent
@@ -81,12 +59,13 @@ class AddItemDialog(QDialog):
         self.type_combo = QComboBox()
         self.type_combo.addItems(self.combo_list)
         self.type_combo.setMaxVisibleItems(15)
-        self.type_combo.setStyleSheet("QComboBox { combobox-popup: 0; }");
-        self.type_combo.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.type_combo.setStyleSheet("QComboBox { combobox-popup: 0; }")
 
         layout.addRow(f'{self.type}:',self.type_combo)
         
         self.type_combo.currentTextChanged.connect(self.on_combo_box_changed)
+
+
 
         # Create buttons
         self.button_box = QPushButton("OK")
@@ -152,13 +131,46 @@ class CustomEditDialog(QDialog):
         parent.print_list_items()
         print(self.target_dict[self.item_text].__dict__)
         attr_list = self.target_dict[self.item_text].__dict__
+        def input_select(value):
+
+
+            if isinstance(value, float):
+                temp_widget = QDoubleSpinBox()
+                temp_widget.setFixedHeight(30)
+                temp_widget.setValue(value)
+                return temp_widget
+            
+            elif isinstance(value, mp.Vector3):
+                temp_widget = QWidget()
+                temp_layout = QHBoxLayout(temp_widget)
+                for i in value:
+                    spin_box = QDoubleSpinBox()
+                    spin_box.setValue(i)
+                    spin_box.setFixedHeight(30)
+                    temp_layout.addWidget(spin_box)
+                return temp_widget
+            
+            elif isinstance(value, mp.Medium):
+                temp_widget = QComboBox()
+                
+                temp_widget.addItems(list(var_dict['Material'].keys()))
+                material_key = reverse_dict(from_dict=var_dict['Material'], find_val=value)
+                if material_key == None:
+                    material_key = 'Vaccum'
+                temp_widget.setCurrentText(material_key)
+                temp_widget.setMaxVisibleItems(15)
+                temp_widget.setStyleSheet("QComboBox { combobox-popup: 0; }")
+                temp_widget.setFixedHeight(30)
+                return temp_widget
+            
         for (key,value) in attr_list.items():
             # print(key,value)
 
             key_input = input_select(value=value)
-
-            key_label = QLabel(f'{key}')
-            layout.addRow(key_label,key_input)
+            if key[0] == '_':
+                key = key[1:]
+            
+            layout.addRow(key,key_input)
             pass
 
 
@@ -224,7 +236,7 @@ class CustomListWidget(QWidget):
     def __init__(self, add_type = 'Structure', add_combo=var_dict['Structure'] ,items=None, parent=None):
         super().__init__(parent)
         if items is None:
-            items = ["Item 1", "Item 2", "Item 3", "Item 4", "Item 5"]
+            items = []
         self.list_items = items
         self.add_combo = add_combo
         self.add_type = add_type

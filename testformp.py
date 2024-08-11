@@ -1,4 +1,5 @@
 import meep as mp
-a = mp.Vector3()
-for i in a:
-    print(i)
+from meep.materials import Al
+a = Al
+b = Al
+print(a == b)
