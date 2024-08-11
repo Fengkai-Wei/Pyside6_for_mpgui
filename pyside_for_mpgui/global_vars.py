@@ -1,10 +1,14 @@
 import meep as mp
+import numpy as np
 from meep.materials import SiO2,cSi,aSi,ITO,Al2O3,GaAs,AlAs,AlN,BK7,Si3N4,Ge,InP,GaN,CdTe,LiNbO3,BaB2O4,CaWO4,CaCO3,Y2O3,YAG,PMMA,PC,PS,CLS,Ag,Au,Cu,Al,Be,Cr,Ni,Pd,Pt,Ti,W
-from meep.source import ContinuousSource, GaussianSource, CustomSource, EigenModeSource, GaussianBeam3DSource, GaussianBeam2DSource,GaussianBeamSource
+def dummy_src(time):
+    return (np.sin(time))
+
+
 def init():
     global var_dict
     var_dict = {
-        'material':{'c-Si':cSi,
+        'Material':{'c-Si':cSi,
                     'a-Si':aSi,
                     'Al':Al,
                     'SiO2':SiO2,
@@ -42,7 +46,7 @@ def init():
                     'W': W,
                     },
 
-        'structure':{
+        'Structure':{
             'Cylinder': mp.Cylinder(radius=0.2,height=1.0),
             'Block': mp.Block(size=(0.2,0.2,0.2)),
             'Sphere': mp.Sphere(radius=0.2),
@@ -51,16 +55,19 @@ def init():
             'Ellipsoid': mp.Ellipsoid(size = (0.2,0.2,0.2)),
             'Prism': mp.Prism(vertices=[mp.Vector3(-0.1,-0.1,0),mp.Vector3(-0.1,0.1,0),mp.Vector3(0.1,0.1,0),mp.Vector3(0.1,-0.1,0)], height=0.2),
                      },
-        'geometry':{},
-        'sources':{'Continuous Source': ContinuousSource,
-                   'Gaussian': GaussianSource,
-                   'Custom Source': CustomSource,
+        'geo':{},
+        'Sources':{'Continuous Source': mp.ContinuousSource,
+                   'Gaussian': mp.GaussianSource,
+                   'Custom Source': mp.CustomSource,
 
         },
-        'boundary':[],
-        'current_sim':mp.Simulation(cell_size = mp.Vector3(2,2,2),resolution=50),
-        'monitors':{},
-        'frequency':1/1.55
+        'src':{},
+
+        'Boundary':[],
+        'CurrentSim':mp.Simulation(cell_size = mp.Vector3(2,2,2),resolution=50),
+        'Monitors':{},
+        'dft':{},
+        'Frequency':1/1.55
 
 
                 }

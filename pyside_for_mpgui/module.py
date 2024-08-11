@@ -1,10 +1,11 @@
 import sys
 import numpy as np
+import meep as mp
 
 from PySide6.QtWidgets import (QSizePolicy, QMainWindow, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QWidget, QListWidget, QListWidgetItem, QMenu, QMessageBox, QDialog, QFormLayout, QLineEdit, QComboBox, QSlider, QDoubleSpinBox, QTabWidget, QGridLayout)
 from PySide6.QtGui import QAction, QFontMetrics
 from PySide6.QtCore import Qt
-
+import copy
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -85,11 +86,32 @@ class CustomEditDialog(QDialog):
         self.setWindowTitle("Edit Item")
         self.setGeometry(100, 100, 300, 200)
 
+        # Check which dict should be edited
+        self.edit_class = parent.add_type
+
+        if self.edit_class == 'Structure':
+
+            self.target_dict = var_dict['geo']
+
+        elif self.edit_class == 'Sources':
+
+            self.target_dict = var_dict['src']
+
+        elif self.edit_class == 'Monitors':
+
+            self.target_dict = var_dict['dft']
+
         # Store the item text
         self.item_text = item_text
 
+        # Get all attr of object
+        parent.print_list_items()
+        print(self.target_dict[self.item_text].__dict__)
+
         # Create layout
         layout = QFormLayout(self)
+
+
 
         # Create a text input
         self.text_input = QLineEdit()
@@ -145,7 +167,7 @@ class CustomEditDialog(QDialog):
         print(f"Combo box changed: {new_text}")
 
 class CustomListWidget(QWidget):
-    def __init__(self, add_type = 'Structure', add_combo=var_dict['structure'] ,items=None, parent=None):
+    def __init__(self, add_type = 'Structure', add_combo=var_dict['Structure'] ,items=None, parent=None):
         super().__init__(parent)
         if items is None:
             items = ["Item 1", "Item 2", "Item 3", "Item 4", "Item 5"]
@@ -199,7 +221,36 @@ class CustomListWidget(QWidget):
                 )
             else:
                 # Add a new item to the list
-                self.list_widget.addItem(values['name'])     
+                self.list_widget.addItem(values['name'])
+
+                
+
+                # Add corresponding objects to temp dict for later use
+                
+                if self.add_type == 'Structure':
+
+                    # if add Structure, then add a geometric object
+                    temp_obj = copy.deepcopy(var_dict['Structure'][values['type']])
+                    var_dict['geo'].update({values['name']:temp_obj})
+
+                elif self.add_type == 'Sources':
+
+                    # if add Sources, then add a geometric object
+                    temp_obj = var_dict['Sources'][values['type']]
+                    if temp_obj == mp.source.CustomSource:
+                        temp_srct = temp_obj(src_func= lambda t: np.random.randn())
+                    else:
+                        temp_srct = temp_obj(frequency = 1/1.55)
+                    temp_src = mp.Source(src = temp_srct,component=mp.Ex,center=mp.Vector3(0,0,0))
+                    var_dict['src'].update({values['name']:temp_src})
+                    print(var_dict['src'])
+
+                elif self.add_type == 'Monitors':
+                    pass
+                    #
+
+
+
         
 
 
@@ -257,13 +308,29 @@ class CustomListWidget(QWidget):
         # Permanently delete the item
         if hasattr(self, 'current_item'):
             row = self.list_widget.row(self.current_item)
+            item = self.list_widget.item(row).text()
             self.list_widget.takeItem(row)
+            
+            if self.add_type == 'Structure':
+
+                var_dict['geo'].pop(item)
+                print(f'Geometry: {var_dict["geo"]}')
+
+            elif self.add_type == 'Sources':
+
+                var_dict['src'].pop(item)
+                print(f'Sources: {var_dict["src"]}')
+            
+            elif self.add_type == 'Monitors':
+                pass
+
             self.print_list_items()
 
     def copy_item(self):
         # Copy the item text to the end of the list
         if hasattr(self, 'current_item'):
             new_item_text = f"{self.current_item.text()} (Copy)"
+
             self.add_item(new_item_text)
             self.print_list_items()
 
@@ -452,7 +519,7 @@ class MainWindow(QMainWindow):
 
         # Create and add tabs
         self.tab1 = CustomListWidget()
-        self.tab2 = CustomListWidget(add_type= 'Source', add_combo= var_dict['sources'])
+        self.tab2 = CustomListWidget(add_type= 'Sources', add_combo= var_dict['Sources'])
         self.tab3 = CustomListWidget()
 
         self.tab_widget.addTab(self.tab1, "Tab 1")
