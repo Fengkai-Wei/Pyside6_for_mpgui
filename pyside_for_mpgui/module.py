@@ -110,7 +110,7 @@ class AddItemDialog(QDialog):
 
         # Create input for name of new item
         self.name_input = QLineEdit()
-        self.name_input.setText(f'New {self.type}')
+        self.name_input.setText(f'New_{self.type}')
         layout.addRow('Name:', self.name_input)
         self.name_input.textChanged.connect(self.on_name_changed)
 
@@ -251,13 +251,13 @@ class CustomEditDialog(QDialog):
 
         # Create buttons
         self.button_box = QPushButton("OK")
-        self.button_box.clicked.connect(self.accept)
+        self.button_box.clicked.connect(self.check_name)
         layout.addRow(self.button_box)
 
         self.setLayout(layout)
 
     def get_name(self):
-        return self.text_input.text(),
+        return self.text_input.text()
 
     def on_text_changed(self, new_text):
         print(f"Text input changed: {new_text}")
@@ -267,6 +267,19 @@ class CustomEditDialog(QDialog):
 
     def on_position_changed(self, x, y, z):
         print(f'current pos is: {x, y, z}')
+
+    def check_name(self):
+        if self.text_input.text() in self.parent.print_list_items():
+            self.msg =  CustomMsgBox(self)
+            self.msg.show_msg(
+                title = 'Invalid Name',
+                message = f"{self.text_input.text()} is already named",
+                icon = QMessageBox.Warning,
+                buttons = QMessageBox.Ok
+            )
+        else:
+            super().accept()
+
 class CustomListWidget(QWidget):
     def __init__(self, add_type = 'Structure', add_combo=var_dict['Structure'] ,items=None, parent=None):
         super().__init__(parent)
@@ -420,8 +433,31 @@ class CustomListWidget(QWidget):
     def copy_item(self):
         # Copy the item text to the end of the list
         if hasattr(self, 'current_item'):
-            new_item_text = f"{self.current_item.text()} (Copy)"
+            new_item_text = f"{self.current_item.text()}_0"
+            counter = 0
+            list = self.print_list_items()
+            while new_item_text in list:
+                counter += 1
+                new_item_text = f"{self.current_item.text()}_{counter}"
 
+
+            
+            if self.add_type == 'Structure':
+
+                copy_obj = var_dict['geo'][self.current_item.text()]
+                var_dict['geo'].update({new_item_text:copy_obj})
+                print(f'Geometry: {var_dict["geo"]}')
+
+            elif self.add_type == 'Sources':
+
+                copy_obj = var_dict['src'][self.current_item.text()]
+                var_dict['src'].update({new_item_text:copy_obj})
+                print(f'Sources: {var_dict["src"]}')
+            
+            elif self.add_type == 'Monitors':
+                pass
+            
+            print(new_item_text)
             self.add_item(new_item_text)
             self.print_list_items()
 
