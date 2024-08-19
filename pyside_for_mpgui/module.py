@@ -2,7 +2,7 @@ import sys
 import numpy as np
 import meep as mp
 
-from PySide6.QtWidgets import (QSizePolicy, QMainWindow, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QWidget, QListWidget, QListWidgetItem, QMenu, QMessageBox, QDialog, QFormLayout, QLineEdit, QComboBox, QSlider, QDoubleSpinBox, QTabWidget, QGridLayout)
+from PySide6.QtWidgets import (QSizePolicy, QMainWindow, QLabel,QSpinBox, QPushButton, QVBoxLayout, QHBoxLayout, QWidget, QListWidget, QListWidgetItem, QMenu, QMessageBox, QDialog, QFormLayout, QLineEdit, QComboBox, QSlider, QDoubleSpinBox, QTabWidget, QGridLayout)
 from PySide6.QtGui import QAction, QFontMetrics
 from PySide6.QtCore import Qt
 import copy
@@ -23,6 +23,65 @@ from  global_vars import var_dict
 def reverse_dict(from_dict, find_val):
     key = next((k for k, v in from_dict.items() if v == find_val), None)
     return key
+
+from PySide6.QtWidgets import QWidget, QHBoxLayout, QDoubleSpinBox, QLabel
+from PySide6.QtCore import Signal, Qt
+
+
+class PositionWidget(QWidget):
+    # Signal emitted when any of the spinboxes change value
+    position_changed = Signal(float, float, float)
+
+    def __init__(self, position=None, parent=None):
+        super().__init__(parent)
+        self.setLayout(QHBoxLayout())
+
+        # Initialize position
+        position = position or [0.0, 0.0, 0.0]
+
+        # Create spinboxes
+        self.x_spinbox = QDoubleSpinBox()
+        self.y_spinbox = QDoubleSpinBox()
+        self.z_spinbox = QDoubleSpinBox()
+
+        # Set initial values
+        self.x_spinbox.setValue(position[0])
+        self.y_spinbox.setValue(position[1])
+        self.z_spinbox.setValue(position[2])
+
+        # Connect valueChanged signals to a common handler
+        self.x_spinbox.valueChanged.connect(self.on_value_changed)
+        self.y_spinbox.valueChanged.connect(self.on_value_changed)
+        self.z_spinbox.valueChanged.connect(self.on_value_changed)
+
+        # Add labels and spinboxes to the layout
+        self.layout().addWidget(QLabel("X:"))
+        self.layout().addWidget(self.x_spinbox)
+        self.layout().addWidget(QLabel("Y:"))
+        self.layout().addWidget(self.y_spinbox)
+        self.layout().addWidget(QLabel("Z:"))
+        self.layout().addWidget(self.z_spinbox)
+
+    def on_value_changed(self):
+        # Emit the position_changed signal with the new position
+        x = self.x_spinbox.value()
+        y = self.y_spinbox.value()
+        z = self.z_spinbox.value()
+        self.position_changed.emit(x, y, z)
+
+    def get_position(self):
+        """Return the current position as a list of [x, y, z]."""
+        return [self.x_spinbox.value(), self.y_spinbox.value(), self.z_spinbox.value()]
+
+    def set_position(self, position):
+        """Set the position to the specified [x, y, z] values."""
+        self.x_spinbox.setValue(position[0])
+        self.y_spinbox.setValue(position[1])
+        self.z_spinbox.setValue(position[2])
+
+
+
+
 
 class CustomMsgBox(QMessageBox):
     def __init__(self, parent = None):
@@ -91,10 +150,11 @@ class AddItemDialog(QDialog):
     def on_name_changed(self,new_name):
         print(f"Name input changed: {new_name}")
     def on_combo_box_changed(self, new_text):
-        print(f"Name input changed: {new_text}")
+        print(f"Combo input changed: {new_text}")
     def get_values(self):
         return {'name':self.name_input.text(),
                 'type':self.type_combo.currentText()}
+
 
 
 
@@ -104,6 +164,7 @@ class CustomEditDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Edit Item")
         self.setGeometry(100, 100, 300, 200)
+        self.parent = parent
 
         # Check which dict should be edited
         self.edit_class = parent.add_type
@@ -124,6 +185,13 @@ class CustomEditDialog(QDialog):
 
         # Store the item text
         self.item_text = item_text
+        
+        # Create a name input
+        self.text_input = QLineEdit()
+        self.text_input.setText(self.item_text)
+        layout.addRow("Text:", self.text_input)
+        self.text_input.textChanged.connect(self.on_text_changed)
+
 
         
 
@@ -131,47 +199,48 @@ class CustomEditDialog(QDialog):
         parent.print_list_items()
         print(self.target_dict[self.item_text].__dict__)
         attr_list = self.target_dict[self.item_text].__dict__
-        def input_select(value):
-
-
-            if isinstance(value, float):
-                temp_widget = QDoubleSpinBox()
-                temp_widget.setFixedHeight(30)
-                temp_widget.setValue(value)
-                return temp_widget
-            
-            elif isinstance(value, mp.Vector3):
-                temp_widget = QWidget()
-                temp_layout = QHBoxLayout(temp_widget)
-                for i in value:
-                    spin_box = QDoubleSpinBox()
-                    spin_box.setValue(i)
-                    spin_box.setFixedHeight(30)
-                    temp_layout.addWidget(spin_box)
-                return temp_widget
-            
-            elif isinstance(value, mp.Medium):
-                temp_widget = QComboBox()
-                
-                temp_widget.addItems(list(var_dict['Material'].keys()))
-                material_key = reverse_dict(from_dict=var_dict['Material'], find_val=value)
-                if material_key == None:
-                    material_key = 'Vaccum'
-                temp_widget.setCurrentText(material_key)
-                temp_widget.setMaxVisibleItems(15)
-                temp_widget.setStyleSheet("QComboBox { combobox-popup: 0; }")
-                temp_widget.setFixedHeight(30)
-                return temp_widget
-            
         for (key,value) in attr_list.items():
             # print(key,value)
 
-            key_input = input_select(value=value)
             if key[0] == '_':
                 key = key[1:]
+            if key == 'label':
+                continue
+
+            widget = QWidget()
+            widget.label = key
+            if isinstance(value, str):
+                widget = QLineEdit(value)
+                widget.textChanged.connect(self.on_val_changed)
+            elif isinstance(value, int):
+                widget = QSpinBox()
+                widget.setValue(value)
+                widget.valueChanged.connect(self.on_val_changed)
+            elif isinstance(value, float):
+                widget = QDoubleSpinBox()
+                widget.setValue(value)
+                widget.valueChanged.connect(self.on_val_changed)
+            elif isinstance(value, mp.Vector3):
+                widget = PositionWidget(value)
+                widget.position_changed.connect(self.on_position_changed)
+                pass
+
+            elif isinstance(value, mp.Medium):
+                widget = QComboBox()
+                current_mat = reverse_dict(from_dict=var_dict['Material'],
+                                           find_val=value)
+                
+                
+                widget.addItems(list(var_dict['Material'].keys()))
+                widget.setMaxVisibleItems(15)
+                widget.setStyleSheet("QComboBox { combobox-popup: 0; }")
+                widget.setCurrentText(current_mat)
+                widget.currentTextChanged.connect(self.on_val_changed)
+                
+
+  
+            layout.addRow(f'{key.capitalize()}:',widget)
             
-            layout.addRow(key,key_input)
-            pass
 
 
        
@@ -179,31 +248,6 @@ class CustomEditDialog(QDialog):
 
 
 
-        # Create a text input
-        self.text_input = QLineEdit()
-        self.text_input.setText(self.item_text)
-        layout.addRow("Text:", self.text_input)
-        self.text_input.textChanged.connect(self.on_text_changed)
-
-        # Create a float input
-        self.float_input = QDoubleSpinBox()
-        self.float_input.setRange(0, 100)
-        self.float_input.setSingleStep(0.1)
-        layout.addRow("Float Input:", self.float_input)
-        self.float_input.valueChanged.connect(self.on_float_input_changed)
-
-        # Create a float slider
-        self.float_slider = QSlider(Qt.Horizontal)
-        self.float_slider.setRange(0, 100)
-        self.float_slider.setSingleStep(1)
-        layout.addRow("Float Slider:", self.float_slider)
-        self.float_slider.valueChanged.connect(self.on_float_slider_changed)
-
-        # Create a combo box
-        self.combo_box = QComboBox()
-        self.combo_box.addItems(["Option 1", "Option 2", "Option 3"])
-        layout.addRow("Combo Box:", self.combo_box)
-        self.combo_box.currentTextChanged.connect(self.on_combo_box_changed)
 
         # Create buttons
         self.button_box = QPushButton("OK")
@@ -212,26 +256,17 @@ class CustomEditDialog(QDialog):
 
         self.setLayout(layout)
 
-    def get_values(self):
-        return {
-            "text": self.text_input.text(),
-            "float_input": self.float_input.value(),
-            "float_slider": self.float_slider.value(),
-            "combo_box": self.combo_box.currentText()
-        }
+    def get_name(self):
+        return self.text_input.text(),
 
     def on_text_changed(self, new_text):
         print(f"Text input changed: {new_text}")
+    
+    def on_val_changed(self,new_val):
+        print(f'new value: {new_val}')
 
-    def on_float_input_changed(self, new_value):
-        print(f"Float input changed: {new_value}")
-
-    def on_float_slider_changed(self, new_value):
-        print(f"Float slider changed: {new_value}")
-
-    def on_combo_box_changed(self, new_text):
-        print(f"Combo box changed: {new_text}")
-
+    def on_position_changed(self, x, y, z):
+        print(f'current pos is: {x, y, z}')
 class CustomListWidget(QWidget):
     def __init__(self, add_type = 'Structure', add_combo=var_dict['Structure'] ,items=None, parent=None):
         super().__init__(parent)
@@ -285,6 +320,9 @@ class CustomListWidget(QWidget):
 
                 # if add Structure, then add a geometric object
                 temp_obj = copy.deepcopy(var_dict['Structure'][values['type']])
+
+                # always force the material is defined from var_dict['Material']
+                temp_obj.material = var_dict['Material']['Vaccum']
                 var_dict['geo'].update({values['name']:temp_obj})
 
             elif self.add_type == 'Sources':
@@ -335,27 +373,27 @@ class CustomListWidget(QWidget):
         if hasattr(self, 'current_item'):
             dialog = CustomEditDialog(self.current_item.text(), self)
             if dialog.exec():
-                values = dialog.get_values()
-                print(f"Edited values: {values}")
-                if self.current_item.text() == values['text']:
+                name = dialog.get_name()
+
+                if self.current_item.text() == name:
                     pass
                 else:
                     # Get current list of item
                     current_list = self.print_list_items()
 
                     # Check if duplicate
-                    if values['text'] in current_list:
+                    if name in current_list:
 
                         self.msg =  CustomMsgBox(self)
                         self.msg.show_msg(
                             title = 'Invalid Name',
-                            message = f"{values['text']} is already named",
+                            message = f"{name} is already named",
                             icon = QMessageBox.Warning,
                             buttons = QMessageBox.Ok
                         )
                         
                     else:
-                        self.current_item.setText(values['text'])
+                        self.current_item.setText(name)
 
     def delete_item(self):
         # Permanently delete the item
