@@ -50,7 +50,7 @@ def init():
                     },
 
         'Structure':{
-            'Cylinder': mp.Cylinder(radius=0.2,height=1.0,material = aSi),
+            'Cylinder': mp.Cylinder(radius=0.5,height=1.0,material = aSi),
             'Block': mp.Block(size=(0.2,0.2,0.2),),
             'Sphere': mp.Sphere(radius=0.2),
             'Wedge': mp.Wedge(radius=0.2),
