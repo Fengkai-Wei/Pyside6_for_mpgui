@@ -202,13 +202,11 @@ class CustomEditDialog(QDialog):
         for (key,value) in attr_list.items():
             # print(key,value)
 
-            if key[0] == '_':
-                key = key[1:]
             if key == 'label':
                 continue
 
             widget = QWidget()
-            widget.label = key
+            
             if isinstance(value, str):
                 widget = QLineEdit(value)
                 widget.textChanged.connect(self.on_val_changed)
@@ -238,8 +236,9 @@ class CustomEditDialog(QDialog):
                 widget.currentTextChanged.connect(self.on_val_changed)
                 
 
-  
-            layout.addRow(f'{key.capitalize()}:',widget)
+            widget.label = key
+            temp_key = key[1:] if key[0] == '_' else key
+            layout.addRow(f'{temp_key.capitalize()}:',widget)
             
 
 
@@ -260,12 +259,24 @@ class CustomEditDialog(QDialog):
         return self.text_input.text()
 
     def on_text_changed(self, new_text):
+        self.target_dict[self.item_text].__dict__['label']=new_text
         print(f"Text input changed: {new_text}")
+
     
     def on_val_changed(self,new_val):
+        sender = self.sender()
+        
+        if sender.label == 'material': 
+            self.target_dict[self.item_text].__dict__[sender.label] = var_dict['Material'][new_val]
+        else:
+            self.target_dict[self.item_text].__dict__[sender.label] = new_val
+
+        
         print(f'new value: {new_val}')
 
     def on_position_changed(self, x, y, z):
+        sender = self.sender()
+        self.target_dict[self.item_text].__dict__[sender.label]=mp.Vector3(x,y,z)
         print(f'current pos is: {x, y, z}')
 
     def check_name(self):
@@ -338,7 +349,8 @@ class CustomListWidget(QWidget):
                 temp_obj = copy.deepcopy(var_dict['Structure'][values['type']])
 
                 # always force the material is defined from var_dict['Material']
-                temp_obj.material = var_dict['Material']['a-Si']
+                temp_obj.material = var_dict['Material']['Vaccum']
+                temp_obj.label = values['name']
                 var_dict['geo'].update({values['name']:temp_obj})
 
             elif self.add_type == 'Sources':
@@ -554,7 +566,7 @@ class PlotWidget(QWidget):
             sim.dft_object = dft_objects
 
         self.ax.clear()
-        sim.plot2D(ax = self.ax, output_plane = mp.simulation.Volume(size = (2,2,0), center = (0,0,0)),labels = True)
+        sim.plot2D(ax = self.ax, output_plane = mp.simulation.Volume(size = (2,2,0), center = (0,0,0)),labels =False,label_geometry = False)
         
 
 
@@ -570,7 +582,7 @@ class PlotWidget(QWidget):
         #self.ax.set_ylim([-16*scale, 16*scale])
         #self.ax.set_yticks(np.arange(-16*scale, 16*scale, 16))
 
-
+        """
         self.ax.spines['left'].set_position('center')
         self.ax.spines['bottom'].set_position('center')
 
@@ -581,6 +593,7 @@ class PlotWidget(QWidget):
         # Show ticks in the left and lower axes only
         self.ax.xaxis.set_ticks_position('bottom')
         self.ax.yaxis.set_ticks_position('left')
+        """
 
 
             
