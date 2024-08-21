@@ -2,14 +2,16 @@ import sys
 import numpy as np
 import meep as mp
 
-from PySide6.QtWidgets import (QSizePolicy, QMainWindow, QLabel,QSpinBox, QPushButton, QVBoxLayout, QHBoxLayout, QWidget, QListWidget, QListWidgetItem, QMenu, QMessageBox, QDialog, QFormLayout, QLineEdit, QComboBox, QSlider, QDoubleSpinBox, QTabWidget, QGridLayout)
-from PySide6.QtGui import QAction, QFontMetrics
-from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (QSizePolicy, QMainWindow, QLabel,QSpinBox, QPushButton, QVBoxLayout, QHBoxLayout, QWidget,QToolTip, QListWidget, QListWidgetItem, QMenu, QMessageBox, QDialog, QFormLayout, QLineEdit, QComboBox, QSlider, QDoubleSpinBox, QTabWidget, QGridLayout)
+from PySide6.QtGui import QAction, QFontMetrics, QCursor
+from PySide6.QtCore import QTimer, QPoint,Qt
 import copy
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
+from matplotlib.backend_bases import MouseEvent
+
 mpl.rcParams['savefig.pad_inches'] = 0
 
 from vispy import scene
@@ -101,7 +103,7 @@ class AddItemDialog(QDialog):
     def __init__(self, type ,combo_list,parent=None):
         super().__init__(parent)
         self.parent = parent
-        self.setGeometry(100, 100, 300, 100)
+        #self.setGeometry(100, 100, 300, 100)
         self.combo_list = combo_list
         self.type = type
         self.setWindowTitle(f'Add {self.type}')
@@ -164,7 +166,7 @@ class CustomEditDialog(QDialog):
     def __init__(self, item_text, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Edit Item")
-        self.setGeometry(100, 100, 300, 200)
+        #self.setGeometry(100, 100, 300, 200)
         self.parent = parent
 
         # Check which dict should be edited
@@ -526,18 +528,21 @@ class CustomButton(QWidget):
 class PlotWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.parent = parent
+        
 
         # Create a matplotlib figure and axis
         self.figure, self.ax = plt.subplots()
 
         # Ensure a tight layout
-        self.figure.tight_layout()
+        #self.figure.tight_layout()
         
         # Create a FigureCanvas object
         self.canvas = FigureCanvas(self.figure)
 
         # Create a toolbar 
         self.toolbar = NavigationToolbar2QT(self.canvas, self)
+        self.toolbar.hide()
         # Real time position
         #self.toolbar.update()
 
@@ -552,10 +557,10 @@ class PlotWidget(QWidget):
         #self.plot()
 
         # Remove all paddings
-        self.figure.subplots_adjust(top=1,
-                            bottom=0,
-                            left=0,
-                            right=1)
+        self.figure.subplots_adjust(top=0.99,
+                            bottom=0.01,
+                            left=0.01,
+                            right=0.99)
         
         # Set xticks and ytick on other side of axis
         self.ax.tick_params(axis='both', which='both', direction='in', labelbottom=False, labeltop=False, labelleft=False, labelright=False)
@@ -569,6 +574,36 @@ class PlotWidget(QWidget):
         
         # Add toolbar functionality to right-click menu
         self.add_toolbar_actions()
+        self.canvas.mpl_connect('motion_notify_event', self.on_mouse_move)
+
+
+        self.tooltip_text = ""
+
+        self.show_tooltip = False
+
+
+    def on_mouse_move(self, event: MouseEvent):
+        if event.inaxes != self.ax:
+            QToolTip.hideText()
+            return
+
+        # 获取鼠标数据坐标
+        x, y = event.xdata, event.ydata
+        self.tooltip_text = f"x: {x:.2f}, y: {y:.2f}"
+
+        # 更新工具提示
+        self.update_tooltip()
+
+    def update_tooltip(self):
+        """ Update the tooltip text based on the latest mouse position. """
+        # 直接显示工具提示文本，而不更新位置
+        QToolTip.showText(self.mapToGlobal(QPoint(0,0)), self.tooltip_text, self.canvas)
+
+
+    def leaveEvent(self, event):
+        super().leaveEvent(event)
+        # 鼠标离开时取消工具提示
+        QToolTip.hideText()
 
     def add_toolbar_actions(self):
         # Add toolbar functionalities to right-click menu 
@@ -730,7 +765,9 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self.setWindowTitle("My Application")
-        self.setGeometry(200, 200, 800, 600)  # Adjust window size for layout
+        #self.setGeometry(0, 0, 1000, 1000)  # Adjust window size for layout
+
+
 
         # Create a central widget
         central_widget = QWidget()
@@ -792,7 +829,6 @@ class MainWindow(QMainWindow):
         self.central_layout.addWidget(self.slider_widget)
 
 
-
         # Create and add widgets
         self.create_label()
         self.button_widget = CustomButton()  # Uses default label "Add"
@@ -802,20 +838,3 @@ class MainWindow(QMainWindow):
         # Create a label and set its text
         label = QLabel("This is a GUI for meep")
         self.central_layout.addWidget(label)  # Add the label to the central layout
-
-
-
-"""def main():
-    # Create the application object
-    app = QApplication(sys.argv)
-
-    # Create and show the main window
-    window = MainWindow()
-    window.show()
-
-    # Run the application event loop
-    sys.exit(app.exec())
-
-if __name__ == "__main__":
-    main()
-"""
