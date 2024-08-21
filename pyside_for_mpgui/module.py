@@ -202,13 +202,11 @@ class CustomEditDialog(QDialog):
         for (key,value) in attr_list.items():
             # print(key,value)
 
-            if key[0] == '_':
-                key = key[1:]
             if key == 'label':
                 continue
 
             widget = QWidget()
-            widget.label = key
+            
             if isinstance(value, str):
                 widget = QLineEdit(value)
                 widget.textChanged.connect(self.on_val_changed)
@@ -238,8 +236,9 @@ class CustomEditDialog(QDialog):
                 widget.currentTextChanged.connect(self.on_val_changed)
                 
 
-  
-            layout.addRow(f'{key.capitalize()}:',widget)
+            widget.label = key
+            temp_key = key[1:] if key[0] == '_' else key
+            layout.addRow(f'{temp_key.capitalize()}:',widget)
             
 
 
@@ -260,16 +259,31 @@ class CustomEditDialog(QDialog):
         return self.text_input.text()
 
     def on_text_changed(self, new_text):
+        self.target_dict[self.item_text].__dict__['label']=new_text
         print(f"Text input changed: {new_text}")
+
     
     def on_val_changed(self,new_val):
+        sender = self.sender()
+        
+        if sender.label == 'material': 
+            self.target_dict[self.item_text].__dict__[sender.label] = var_dict['Material'][new_val]
+        else:
+            self.target_dict[self.item_text].__dict__[sender.label] = new_val
+
+        
         print(f'new value: {new_val}')
 
     def on_position_changed(self, x, y, z):
+        sender = self.sender()
+        self.target_dict[self.item_text].__dict__[sender.label]=mp.Vector3(x,y,z)
         print(f'current pos is: {x, y, z}')
 
     def check_name(self):
-        if self.text_input.text() in self.parent.print_list_items():
+        if self.text_input.text() == self.item_text:
+            super().accept()
+
+        elif self.text_input.text() in self.parent.print_list_items():
             self.msg =  CustomMsgBox(self)
             self.msg.show_msg(
                 title = 'Invalid Name',
@@ -336,6 +350,7 @@ class CustomListWidget(QWidget):
 
                 # always force the material is defined from var_dict['Material']
                 temp_obj.material = var_dict['Material']['Vaccum']
+                temp_obj.label = values['name']
                 var_dict['geo'].update({values['name']:temp_obj})
 
             elif self.add_type == 'Sources':
@@ -418,12 +433,12 @@ class CustomListWidget(QWidget):
             if self.add_type == 'Structure':
 
                 var_dict['geo'].pop(item)
-                print(f'Geometry: {var_dict["geo"]}')
+                print(f'Geometry: {var_dict["geo"].keys()}')
 
             elif self.add_type == 'Sources':
 
                 var_dict['src'].pop(item)
-                print(f'Sources: {var_dict["src"]}')
+                print(f'Sources: {var_dict["src"].key()}')
             
             elif self.add_type == 'Monitors':
                 pass
@@ -446,19 +461,19 @@ class CustomListWidget(QWidget):
 
                 copy_obj = var_dict['geo'][self.current_item.text()]
                 var_dict['geo'].update({new_item_text:copy_obj})
-                print(f'Geometry: {var_dict["geo"]}')
+                print(f'Geometry: {var_dict["geo"].keys()}')
 
             elif self.add_type == 'Sources':
 
                 copy_obj = var_dict['src'][self.current_item.text()]
                 var_dict['src'].update({new_item_text:copy_obj})
-                print(f'Sources: {var_dict["src"]}')
+                print(f'Sources: {var_dict["src"].keys()}')
             
             elif self.add_type == 'Monitors':
                 pass
             
             print(new_item_text)
-            self.add_item(new_item_text)
+            self.list_widget.addItem(new_item_text)
             self.print_list_items()
 
     def print_list_items(self):
@@ -468,6 +483,20 @@ class CustomListWidget(QWidget):
         for index in range(self.list_widget.count()):
             list_items.append(self.list_widget.item(index).text())
         print(list_items)
+
+        if self.add_type == 'Structure':
+
+            target_dict = var_dict['geo']
+
+        elif self.add_type == 'Sources':
+
+            target_dict = var_dict['src']
+
+        elif self.add_type == 'Monitors':
+            pass
+        target_dict = {key: target_dict[key] for key in list_items}
+        print(target_dict.keys())
+
         return list_items
 
 
@@ -526,20 +555,34 @@ class PlotWidget(QWidget):
 
     def plot(self, scale=1):
         # Clear previous plot
+
+        if var_dict['geo'] or var_dict['src'] or var_dict['dft']:
+            geometry = list(var_dict['geo'].values())
+            sources = list(var_dict['src'].values())
+            dft_objects = list(var_dict['dft'].values())
+            sim = var_dict['CurrentSim']
+            sim.geometry = geometry
+            sim.sources = sources
+            sim.dft_object = dft_objects
+
         self.ax.clear()
+        sim.plot2D(ax = self.ax, output_plane = mp.simulation.Volume(size = (2,2,0), center = (0,0,0)),labels =False,label_geometry = False)
+        
+
+
         self.ax.grid(color=(0,0,0,0.1), linestyle='--')
         # Example plot with dynamic scaling
-        x = [1, 2, 3, 4]
-        y = [1, 4, 9, 16]
-        self.ax.plot(x, [i * scale for i in y], 'r-')
+        #x = [1, 2, 3, 4]
+        #y = [1, 4, 9, 16]
+        #self.ax.plot(x, [i * scale for i in y], 'r-')
         # self.ax.set_xlabel('X Axis')
         # self.ax.set_ylabel('Y Axis')
-        self.ax.set_xlim([-6, 6])
-        self.ax.set_xticks(np.arange(-6, 6, 1))
-        self.ax.set_ylim([-16*scale, 16*scale])
-        self.ax.set_yticks(np.arange(-16*scale, 16*scale, 16))
+        #self.ax.set_xlim([-6, 6])
+        #self.ax.set_xticks(np.arange(-6, 6, 1))
+        #self.ax.set_ylim([-16*scale, 16*scale])
+        #self.ax.set_yticks(np.arange(-16*scale, 16*scale, 16))
 
-
+        """
         self.ax.spines['left'].set_position('center')
         self.ax.spines['bottom'].set_position('center')
 
@@ -550,15 +593,11 @@ class PlotWidget(QWidget):
         # Show ticks in the left and lower axes only
         self.ax.xaxis.set_ticks_position('bottom')
         self.ax.yaxis.set_ticks_position('left')
+        """
 
 
-        # self.ax.set_title('Interactive Plot')
+            
 
-        # Hide x-axis
-        # self.ax.get_xaxis().set_visible(False)
-
-        # Hide y-axis 
-        # self.ax.get_yaxis().set_visible(False)
 
         # Draw the plot
         self.canvas.draw()
