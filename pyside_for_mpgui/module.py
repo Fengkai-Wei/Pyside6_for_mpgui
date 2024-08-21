@@ -9,6 +9,7 @@ import copy
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 mpl.rcParams['savefig.pad_inches'] = 0
 
 from vispy import scene
@@ -486,16 +487,15 @@ class CustomListWidget(QWidget):
 
         if self.add_type == 'Structure':
 
-            target_dict = var_dict['geo']
+            var_dict['geo'] = {key: var_dict['geo'][key] for key in list_items}
 
         elif self.add_type == 'Sources':
 
-            target_dict = var_dict['src']
+            var_dict['src'] = {key: var_dict['src'][key] for key in list_items}
 
         elif self.add_type == 'Monitors':
             pass
-        target_dict = {key: target_dict[key] for key in list_items}
-        print(target_dict.keys())
+
 
         return list_items
 
@@ -532,9 +532,14 @@ class PlotWidget(QWidget):
 
         # Ensure a tight layout
         self.figure.tight_layout()
-
+        
         # Create a FigureCanvas object
         self.canvas = FigureCanvas(self.figure)
+
+        # Create a toolbar 
+        self.toolbar = NavigationToolbar2QT(self.canvas, self)
+        # Real time position
+        #self.toolbar.update()
 
         # Create a QVBoxLayout for this widget
         self.layout = QVBoxLayout(self)
@@ -542,7 +547,6 @@ class PlotWidget(QWidget):
 
         # Add the canvas to the layout
         self.layout.addWidget(self.canvas)
-
 
         # Plot some example data
         #self.plot()
@@ -552,12 +556,65 @@ class PlotWidget(QWidget):
                             bottom=0,
                             left=0,
                             right=1)
+        
+        # Set xticks and ytick on other side of axis
+        self.ax.tick_params(axis='both', which='both', direction='in', labelbottom=False, labeltop=False, labelleft=False, labelright=False)
+
+        # Add right-click menu to canvas object
+        self.canvas.setContextMenuPolicy(Qt.CustomContextMenu)  # Qt.CustomContextMenu
+        self.canvas.customContextMenuRequested.connect(self.show_context_menu)
+
+        # Create right-click menu
+        self.context_menu = QMenu(self)
+        
+        # Add toolbar functionality to right-click menu
+        self.add_toolbar_actions()
+
+    def add_toolbar_actions(self):
+        # Add toolbar functionalities to right-click menu 
+        
+        self.add_action("Save Figure", self.save_figure)
+        self.add_action("Home", self.home)
+        self.add_action("Back", self.back)
+        self.add_action("Forward", self.forward)
+        self.add_action("Print Figure", self.print_figure)
+
+    def add_action(self, text, slot):
+        action = QAction(text, self)
+        action.triggered.connect(slot)
+        self.context_menu.addAction(action)
+
+    def show_context_menu(self, point):
+        self.context_menu.exec(self.canvas.mapToGlobal(point))
+
+    def save_figure(self):
+        self.toolbar.save_figure()
+        self.update()
+
+    def home(self):
+        self.toolbar.home()
+        self.update()
+
+    def back(self):
+        self.toolbar.back()
+        self.update()
+
+    def forward(self):
+        self.toolbar.forward()
+        self.update()
+
+    def print_figure(self):
+        self.toolbar.print_figure()
+        self.update()
+
 
     def plot(self, scale=1):
         # Clear previous plot
 
         if var_dict['geo'] or var_dict['src'] or var_dict['dft']:
             geometry = list(var_dict['geo'].values())
+            print(var_dict['geo'].items())
+            print(var_dict['geo'].values())
             sources = list(var_dict['src'].values())
             dft_objects = list(var_dict['dft'].values())
             sim = var_dict['CurrentSim']
@@ -575,8 +632,8 @@ class PlotWidget(QWidget):
         #x = [1, 2, 3, 4]
         #y = [1, 4, 9, 16]
         #self.ax.plot(x, [i * scale for i in y], 'r-')
-        # self.ax.set_xlabel('X Axis')
-        # self.ax.set_ylabel('Y Axis')
+        self.ax.set_xlabel('')
+        self.ax.set_ylabel('')
         #self.ax.set_xlim([-6, 6])
         #self.ax.set_xticks(np.arange(-6, 6, 1))
         #self.ax.set_ylim([-16*scale, 16*scale])
