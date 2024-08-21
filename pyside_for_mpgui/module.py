@@ -526,10 +526,10 @@ class CustomButton(QWidget):
         msg_box.exec()
 
 class PlotWidget(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, output_plane: mp.simulation.Volume, parent=None):
         super().__init__(parent)
         self.parent = parent
-        
+        self.output_plane = output_plane
 
         # Create a matplotlib figure and axis
         self.figure, self.ax = plt.subplots()
@@ -657,42 +657,42 @@ class PlotWidget(QWidget):
             sim.sources = sources
             sim.dft_object = dft_objects
 
-        self.ax.clear()
-        sim.plot2D(ax = self.ax, output_plane = mp.simulation.Volume(size = (2,2,0), center = (0,0,0)),labels =False,label_geometry = False)
+            self.ax.clear()
+            sim.plot2D(ax = self.ax, output_plane = self.output_plane,labels =False,label_geometry = False)
         
 
 
-        self.ax.grid(color=(0,0,0,0.1), linestyle='--')
-        # Example plot with dynamic scaling
-        #x = [1, 2, 3, 4]
-        #y = [1, 4, 9, 16]
-        #self.ax.plot(x, [i * scale for i in y], 'r-')
-        self.ax.set_xlabel('')
-        self.ax.set_ylabel('')
-        #self.ax.set_xlim([-6, 6])
-        #self.ax.set_xticks(np.arange(-6, 6, 1))
-        #self.ax.set_ylim([-16*scale, 16*scale])
-        #self.ax.set_yticks(np.arange(-16*scale, 16*scale, 16))
+            self.ax.grid(color=(0,0,0,0.1), linestyle='--')
+            # Example plot with dynamic scaling
+            #x = [1, 2, 3, 4]
+            #y = [1, 4, 9, 16]
+            #self.ax.plot(x, [i * scale for i in y], 'r-')
+            self.ax.set_xlabel('')
+            self.ax.set_ylabel('')
+            #self.ax.set_xlim([-6, 6])
+            #self.ax.set_xticks(np.arange(-6, 6, 1))
+            #self.ax.set_ylim([-16*scale, 16*scale])
+            #self.ax.set_yticks(np.arange(-16*scale, 16*scale, 16))
 
-        """
-        self.ax.spines['left'].set_position('center')
-        self.ax.spines['bottom'].set_position('center')
+            """
+            self.ax.spines['left'].set_position('center')
+            self.ax.spines['bottom'].set_position('center')
 
-        # Eliminate upper and right axes
-        self.ax.spines['right'].set_color('none')
-        self.ax.spines['top'].set_color('none')
+            # Eliminate upper and right axes
+            self.ax.spines['right'].set_color('none')
+            self.ax.spines['top'].set_color('none')
 
-        # Show ticks in the left and lower axes only
-        self.ax.xaxis.set_ticks_position('bottom')
-        self.ax.yaxis.set_ticks_position('left')
-        """
-
-
-            
+            # Show ticks in the left and lower axes only
+            self.ax.xaxis.set_ticks_position('bottom')
+            self.ax.yaxis.set_ticks_position('left')
+            """
 
 
-        # Draw the plot
-        self.canvas.draw()
+                
+
+
+            # Draw the plot
+            self.canvas.draw()
 
 class SliderWidget(QWidget):
     def __init__(self, plot_widget, parent=None):
@@ -793,9 +793,17 @@ class MainWindow(QMainWindow):
         self.plot_grid = QGridLayout()
 
         # Create 3 viewings canvas widget
-        self.plot_widget_0 = PlotWidget()
-        self.plot_widget_1 = PlotWidget()
-        self.plot_widget_2 = PlotWidget()
+
+        # Get cell_size and geometric_center of current simmulation object
+        size, center = var_dict['CurrentSim'].cell_size, var_dict['CurrentSim'].geometry_center
+
+        # For x-y plane
+        size_mat = np.array(size)*np.array([[1,1,0],
+                                            [0,1,1],
+                                            [1,0,1]])
+        self.plot_widget_0 = PlotWidget(output_plane=mp.simulation.Volume(size = size_mat[0],center = center))
+        self.plot_widget_1 = PlotWidget(output_plane=mp.simulation.Volume(size = size_mat[1],center = center))
+        self.plot_widget_2 = PlotWidget(output_plane=mp.simulation.Volume(size = size_mat[2],center = center))
 
         # Create and add the vispy plot widget
         self.vispy_plot_widget = VispyPlotWidget()
@@ -825,7 +833,7 @@ class MainWindow(QMainWindow):
         self.central_layout.addLayout(self.plot_grid)
 
         # Create and add the slider widget
-        self.slider_widget = SliderWidget(self.plot_widget_0)
+        self.slider_widget = SliderWidget(self.plot_widget_1)
         self.central_layout.addWidget(self.slider_widget)
 
 
