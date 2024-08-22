@@ -22,7 +22,7 @@ from var_manage import add_var, rm_var
 global_vars.init()
 from  global_vars import var_dict
 
-
+mp.verbosity(0)
 def reverse_dict(from_dict, find_val):
     key = next((k for k, v in from_dict.items() if v == find_val), None)
     return key
@@ -163,11 +163,12 @@ class AddItemDialog(QDialog):
 
 
 class CustomEditDialog(QDialog):
-    def __init__(self, item_text, parent=None):
+    def __init__(self, item_text,plot_list, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Edit Item")
         #self.setGeometry(100, 100, 300, 200)
         self.parent = parent
+        self.plot_list = plot_list
 
         # Check which dict should be edited
         self.edit_class = parent.add_type
@@ -274,12 +275,19 @@ class CustomEditDialog(QDialog):
         else:
             self.target_dict[self.item_text].__dict__[sender.label] = new_val
 
-        
+        for sub_plot in self.plot_list:
+            sub_plot.plot()
+        print('plot')
         print(f'new value: {new_val}')
+
 
     def on_position_changed(self, x, y, z):
         sender = self.sender()
         self.target_dict[self.item_text].__dict__[sender.label]=mp.Vector3(x,y,z)
+
+        for sub_plot in self.plot_list:
+            sub_plot.plot()
+        print('plot')
         print(f'current pos is: {x, y, z}')
 
     def check_name(self):
@@ -305,6 +313,7 @@ class CustomListWidget(QWidget):
         self.list_items = items
         self.add_combo = add_combo
         self.add_type = add_type
+        self.plot_list = [self.parent().plot_widget_0, self.parent().plot_widget_1, self.parent().plot_widget_2, self.parent().vispy_plot_widget]
         self.init_ui()
 
     def init_ui(self):
@@ -402,7 +411,7 @@ class CustomListWidget(QWidget):
     def edit_item(self):
         # Show a popup with various input fields
         if hasattr(self, 'current_item'):
-            dialog = CustomEditDialog(self.current_item.text(), self)
+            dialog = CustomEditDialog(item_text=self.current_item.text(), plot_list=self.plot_list,parent=self)
             if dialog.exec():
                 name = dialog.get_name()
 
@@ -729,12 +738,13 @@ class VispyPlotWidget(QWidget):
         # Create a canvas
         self.canvas = scene.SceneCanvas(keys='interactive', show=True)
         
+        
         # Create a view
-        self.view = self.canvas.central_widget.add_view()
+        #self.view = self.canvas.central_widget.add_view()
         
         # Create 3D axis
-        self.view.camera = 'turntable'
-        axis = visuals.XYZAxis(parent=self.view.scene)
+        #self.view.camera = 'turntable'
+        #axis = visuals.XYZAxis(parent=self.view.scene)
         
         # Add data
         # self.plot()
@@ -746,17 +756,21 @@ class VispyPlotWidget(QWidget):
         # Add the canvas to the layout
         self.layout.addWidget(self.canvas.native)
 
+        # Freeze when not calling for plot 
+        self.canvas.freeze()
+
     def plot(self):
-        # Create some example data
-        import numpy as np
-        data = np.random.normal(size=(100, 3), scale=0.2)
-        
-        # Create scatter plot
-        scatter = visuals.Markers()
-        scatter.set_data(data, edge_color=None, face_color=(1, 1, 1, 0.5), size=5)
-        
-        # Add scatter plot to the view
-        self.view.add(scatter)
+
+        self.canvas.unfreeze()
+
+        # Clear old canvas 
+        #self.canvas.clear()
+
+        if var_dict['CurrentSim']:
+            
+            self.canvas = var_dict['CurrentSim'].plot3D()
+
+        self.canvas.freeze()
 
 
 
@@ -775,19 +789,7 @@ class MainWindow(QMainWindow):
 
         # Create and configure layouts
         self.central_layout = QVBoxLayout(central_widget)
-        self.tab_widget = QTabWidget()
 
-        # Create and add tabs
-        self.tab1 = CustomListWidget()
-        self.tab2 = CustomListWidget(add_type= 'Sources', add_combo= var_dict['Sources'])
-        self.tab3 = CustomListWidget()
-
-        self.tab_widget.addTab(self.tab1, "Tab 1")
-        self.tab_widget.addTab(self.tab2, "Tab 2")
-        self.tab_widget.addTab(self.tab3, "Tab 3")
-
-        # Add the tab widget to the central layout
-        self.central_layout.addWidget(self.tab_widget)
 
         # Create grid layout for 3 viewing and 3d plot
         self.plot_grid = QGridLayout()
@@ -797,7 +799,6 @@ class MainWindow(QMainWindow):
         # Get cell_size and geometric_center of current simmulation object
         size, center = var_dict['CurrentSim'].cell_size, var_dict['CurrentSim'].geometry_center
 
-        # For x-y plane
         size_mat = np.array(size)*np.array([[1,1,0],
                                             [0,1,1],
                                             [1,0,1]])
@@ -828,6 +829,20 @@ class MainWindow(QMainWindow):
         
         # Minimize the margins around the layout
         self.plot_grid.setContentsMargins(0, 0, 0, 0)
+
+        self.tab_widget = QTabWidget()
+
+        # Create and add tabs
+        self.tab1 = CustomListWidget(parent=self)
+        self.tab2 = CustomListWidget(add_type= 'Sources', add_combo= var_dict['Sources'],parent=self)
+        self.tab3 = CustomListWidget(parent=self)
+
+        self.tab_widget.addTab(self.tab1, "Tab 1")
+        self.tab_widget.addTab(self.tab2, "Tab 2")
+        self.tab_widget.addTab(self.tab3, "Tab 3")
+
+        # Add the tab widget to the central layout
+        self.central_layout.addWidget(self.tab_widget)
 
         # Add grid layout to central layout
         self.central_layout.addLayout(self.plot_grid)

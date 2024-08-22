@@ -24,10 +24,10 @@ class VisPyCanvas(scene.SceneCanvas):
         self.axis = scene.visuals.XYZAxis(parent=self.view.scene)
         self.freeze()
 
-    def update_canvas(self, value):
+    def plot(self, value):
         """Update the canvas when the slider value changes."""
         # 更新随机数据的大小或位置
-        self.data = np.random.rand(100, 3) * (value / 10)
+        self.data = np.random.rand(100, 3) * (10 / 10)
         self.scatter.set_data(self.data,face_color = 'red',size =5)
         self.update()
 
@@ -53,7 +53,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.slider)
 
         # 连接滑块的值变化信号到canvas更新函数
-        self.slider.valueChanged.connect(self.canvas.update_canvas)
+        self.slider.valueChanged.connect(self.canvas.plot)
 
 
 if __name__ == "__main__":
