@@ -740,11 +740,11 @@ class VispyPlotWidget(QWidget):
         
         
         # Create a view
-        #self.view = self.canvas.central_widget.add_view()
+        self.view = self.canvas.central_widget.add_view()
         
         # Create 3D axis
-        #self.view.camera = 'turntable'
-        #axis = visuals.XYZAxis(parent=self.view.scene)
+        self.view.camera = 'turntable'
+        visuals.XYZAxis(parent=self.view.scene)
         
         # Add data
         # self.plot()
@@ -761,16 +761,41 @@ class VispyPlotWidget(QWidget):
 
     def plot(self):
 
-        self.canvas.unfreeze()
+        if var_dict['CurrentSim']:
 
-        # Clear old canvas 
-        #self.canvas.clear()
+            self.canvas.unfreeze()
+            
+            # Get canvas and view from plot3D
+            mp_canvas = var_dict['CurrentSim'].plot3D()
+            mp_view = mp_canvas.central_widget.children[0]
+            print(mp_view)
+            # Clear old view in canvas
+            self.view.clear()
 
+            for visuals in mp_view.children:
+                if isinstance(visuals, scene.visuals.Visual):
+                    new_visual  = visuals.__class__(**visuals._params)
+                    self.view.add(new_visual)
+
+            self.canvas.update()
+
+            
+            
+
+        
+
+            self.canvas.freeze()
+    
+    def mp_canvas(self):
         if var_dict['CurrentSim']:
             
-            self.canvas = var_dict['CurrentSim'].plot3D()
+            canvas = var_dict['CurrentSim'].plot3D()
+            view = canvas.central_widget.add_view()
+            view.camera = 'turntable'
 
-        self.canvas.freeze()
+            
+
+        
 
 
 
