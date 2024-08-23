@@ -263,7 +263,16 @@ class CustomEditDialog(QDialog):
         return self.text_input.text()
 
     def on_text_changed(self, new_text):
-        self.target_dict[self.item_text].__dict__['label']=new_text
+
+        self.target_dict.clear()
+        print(self.target_dict == var_dict['geo'])
+        
+
+        self.target_dict[new_text] = self.target_dict.pop(self.item_text)
+
+        self.item_text = new_text
+        print()
+        self.parent.print_list_items()
         print(f"Text input changed: {new_text}")
 
     
@@ -277,7 +286,7 @@ class CustomEditDialog(QDialog):
 
         for sub_plot in self.plot_list:
             sub_plot.plot()
-        print('plot')
+        
         print(f'new value: {new_val}')
 
 
@@ -488,13 +497,14 @@ class CustomListWidget(QWidget):
             self.list_widget.addItem(new_item_text)
             self.print_list_items()
 
-    def print_list_items(self):
+    def print_list_items(self, if_print = False):
         # Print all items in the list
         list_items = []
         print("Current list items:")
         for index in range(self.list_widget.count()):
             list_items.append(self.list_widget.item(index).text())
-        print(list_items)
+        if if_print:
+            print(list_items)
 
         if self.add_type == 'Structure':
 
@@ -736,7 +746,9 @@ class VispyPlotWidget(QWidget):
         super().__init__(parent)
 
         # Create a canvas
-        self.canvas = scene.SceneCanvas(keys='interactive', show=True)
+        self.canvas = scene.SceneCanvas(keys='interactive',
+                                        show=True,
+                                        bgcolor='white')
         
         
         # Create a view
@@ -744,8 +756,8 @@ class VispyPlotWidget(QWidget):
         
         # Create 3D axis
         self.view.camera = 'turntable'
-        visuals.XYZAxis(parent=self.view.scene)
-        
+        xyz_axis = visuals.XYZAxis(parent=self.view.scene)
+        xyz_axis._width = 3
         # Add data
         # self.plot()
 
@@ -757,6 +769,7 @@ class VispyPlotWidget(QWidget):
         self.layout.addWidget(self.canvas.native)
 
         # Freeze when not calling for plot 
+        self.canvas.update()
         self.canvas.freeze()
 
     def plot(self):
@@ -768,15 +781,29 @@ class VispyPlotWidget(QWidget):
             # Get canvas and view from plot3D
             mp_canvas = var_dict['CurrentSim'].plot3D()
             mp_view = mp_canvas.central_widget.children[0]
-            print(mp_view)
-            # Clear old view in canvas
-            self.view.clear()
 
+            # Clear old view in canvas
+            self.canvas.central_widget.remove_widget(self.view)
+
+            # Redefine the view from visapy plot
+            self.view = mp_view
+            
+            # Add axis
+            xyz_axis = visuals.XYZAxis(parent=self.view.scene)
+            xyz_axis._width = 3
+
+            # Add new ViewBox to old canvax
+            self.canvas.central_widget.add_widget(self.view)
+
+
+            """
             for visuals in mp_view.children:
                 if isinstance(visuals, scene.visuals.Visual):
                     new_visual  = visuals.__class__(**visuals._params)
                     self.view.add(new_visual)
-
+            """
+            
+            # Update the canvas
             self.canvas.update()
 
             
@@ -862,9 +889,9 @@ class MainWindow(QMainWindow):
         self.tab2 = CustomListWidget(add_type= 'Sources', add_combo= var_dict['Sources'],parent=self)
         self.tab3 = CustomListWidget(parent=self)
 
-        self.tab_widget.addTab(self.tab1, "Tab 1")
-        self.tab_widget.addTab(self.tab2, "Tab 2")
-        self.tab_widget.addTab(self.tab3, "Tab 3")
+        self.tab_widget.addTab(self.tab1, "Structures")
+        self.tab_widget.addTab(self.tab2, "Sources")
+        self.tab_widget.addTab(self.tab3, "Monitors")
 
         # Add the tab widget to the central layout
         self.central_layout.addWidget(self.tab_widget)
