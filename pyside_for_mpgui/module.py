@@ -2,7 +2,7 @@ import sys
 import numpy as np
 import meep as mp
 
-from PySide6.QtWidgets import (QSizePolicy, QMainWindow, QLabel,QSpinBox, QPushButton, QVBoxLayout, QHBoxLayout, QWidget,QToolTip, QListWidget, QListWidgetItem, QMenu, QMessageBox, QDialog, QFormLayout, QLineEdit, QComboBox, QSlider, QDoubleSpinBox, QTabWidget, QGridLayout)
+from PySide6.QtWidgets import (QSizePolicy,QTableWidget, QMainWindow,QHeaderView, QLabel,QSpinBox, QPushButton, QVBoxLayout, QHBoxLayout, QWidget,QToolTip, QListWidget, QListWidgetItem, QMenu, QMessageBox, QDialog, QFormLayout, QLineEdit, QComboBox, QSlider, QDoubleSpinBox, QTabWidget, QGridLayout)
 from PySide6.QtGui import QAction, QFontMetrics, QCursor
 from PySide6.QtCore import QTimer, QPoint,Qt
 import copy
@@ -29,6 +29,171 @@ def reverse_dict(from_dict, find_val):
 
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QDoubleSpinBox, QLabel
 from PySide6.QtCore import Signal, Qt
+
+class BoundaryDialog(QDialog):
+    def __init__(self,side,dir,pml_type,parent=None):
+        super().__init__(parent)
+        self.parent = parent
+        self.side = side
+        self.dir = dir
+        self.type = pml_type
+        self.mp_dir = var_dict['direction'][self.dir]
+        self.mp_side = var_dict['side'][self.side]
+
+        self.setWindowTitle(f'{type(self.type).__name__} Layer{self.dir, self.side}')
+
+        # Create layout
+        layout = QFormLayout(self)
+        for key,val in self.type.__dict__.items():
+            show_attr = key
+
+            if key[0] == '_':
+                show_attr = key[1:]
+            
+            if show_attr == 'thickness':
+                self.thickness = QDoubleSpinBox()
+                layout.addRow(f'{show_attr.capitalize()}:',self.thickness)
+            elif show_attr == 'direction':
+                self.dircombo = QComboBox()
+                layout.addRow(f'{show_attr.capitalize()}:',self.dircombo)
+            elif show_attr == 'side':
+                self.sidecombo = QComboBox()
+                layout.addRow(f'{show_attr.capitalize()}:',self.sidecombo)
+            elif show_attr == 'r_asymptotic':
+                self.r = QDoubleSpinBox()
+                layout.addRow(f'{show_attr.capitalize()}:',self.r)
+            elif show_attr == 'pml_profile':
+                self.pml = QPushButton('compile')
+                layout.addRow(f'{show_attr.capitalize()}:',self.pml)
+            else:
+                continue
+        
+
+        self.button_clear = QPushButton('Clear')
+        self.button_clear.setStyleSheet("color: red; font-weight: bold;")
+        self.button_clear.clicked.connect(self.clear)
+
+        self.button_submit = QPushButton('Submit')
+        self.button_submit.clicked.connect(self.submit)
+        layout.addRow(self.button_submit)
+        layout.addRow(self.button_clear)
+
+    def submit(self):
+        for item in var_dict['Boundary']:
+            if item.direction == self.mp_dir and item.side == self.mp_side:
+                var_dict['Boundary']
+                super().accept()
+                return
+        
+        var_dict['Boundary'].append(self.type.__class__(#thickness = ,
+                                                        direction = self.mp_dir,
+                                                        side = self.mp_side))
+        self.parent.setText(f'{type(self.type).__name__}, Thickness = ')
+        super().accept()
+        
+
+
+    
+    def clear(self):
+        for item in var_dict['Boundary']:
+            if item.direction == self.mp_dir and item.side == self.mp_side:
+                var_dict['Boundary'].remove(item)
+                break
+        self.parent.setText('Select an Boundary Condition')
+        super().accept()
+
+class ButtonComboBox(QPushButton):
+    def __init__(self, options, direction, side, parent=None):
+        super().__init__(parent)
+        self.setText('Select an Boundary Condition')
+        self.options = options
+        self.parent = parent
+        
+        # 创建一个菜单，并将按钮作为选项添加到菜单中
+        self.menu = QMenu(self)
+        self.setMenu(self.menu)
+        self.setStyleSheet("QMenu { width: 150px; }")
+        
+        for option in options:
+            action = QAction(option, self)
+            action.triggered.connect(lambda checked, opt=option: self.on_option_selected(opt,direction,side))
+            self.menu.addAction(action)
+    
+    def on_option_selected(self, option,dir,side):
+        #self.setText(option)
+        print(f'I am {option} at {dir}.{side}')
+
+        
+
+        if option == 'Metallic' or option == 'Magnetic':
+            pass
+            side = var_dict['side'][side],
+            direction = var_dict['direction'][dir],
+            condition = var_dict['boundary_condition'][option]
+            var_dict['CurrentSim'].set_boundary(side = side,
+                                                direction = direction,
+                                                condition = condition)
+        elif option == 'PML' or option == 'Absorber':
+            dialog = BoundaryDialog(dir = dir,
+                                    side = side, 
+                                    pml_type = mp.PML(thickness = 0.1) if option == 'PML' else mp.Absorber(thickness = 0.1),
+                                    parent = self)
+            if dialog.exec():
+
+                pass
+        elif option == 'Periodic':
+            pass
+
+class BoundaryTable(QWidget):
+    def __init__(self):
+        super().__init__()
+
+        # 创建 QWidget 和布局
+        layout = QVBoxLayout()
+
+        # 创建 QTableWidget
+        self.table_widget = QTableWidget()
+        
+        # 设置行数和列数
+        self.table_widget.setRowCount(3)
+        self.table_widget.setColumnCount(2)
+        
+        # 设置列标题
+        col_list = ['Low', 'High']
+        self.table_widget.setHorizontalHeaderLabels(col_list)
+        
+        # 设置行标题
+        row_list = ['X', 'Y', 'Z']
+        self.table_widget.setVerticalHeaderLabels(row_list)
+        
+        # 创建按钮选项
+        options = ['PML', 'Absorber', 'Periodic', 'Metallic', 'Magnetic']
+        
+        # 将自定义 ButtonComboBox 添加到每个单元格中
+        for row in range(3):
+            for col in range(2):
+                button_combo = ButtonComboBox(side=col_list[col],
+                                              direction = row_list[row],
+                                              options=options,
+                                              parent=self)
+                self.table_widget.setCellWidget(row, col, button_combo)
+
+        # 设置表头字体为粗体
+        self.table_widget.horizontalHeader().setStyleSheet("font-weight: bold;")
+        self.table_widget.verticalHeader().setStyleSheet("font-weight: bold;")
+
+        # 设置行高和列宽
+        self.table_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        # 设置表格的列宽和行高可以自动调整
+        self.table_widget.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table_widget.verticalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        
+        # 将表格添加到布局中
+        layout.addWidget(self.table_widget)
+        self.setLayout(layout)
+        # 设置主窗口的中央部件
+
+
 
 
 class PositionWidget(QWidget):
@@ -238,6 +403,8 @@ class CustomEditDialog(QDialog):
                 widget.setStyleSheet("QComboBox { combobox-popup: 0; }")
                 widget.setCurrentText(current_mat)
                 widget.currentTextChanged.connect(self.on_val_changed)
+            else:
+                widget = QLabel(type(value).__name__)
                 
 
             widget.label = key
@@ -264,15 +431,23 @@ class CustomEditDialog(QDialog):
 
     def on_text_changed(self, new_text):
 
-        self.target_dict.clear()
+        #self.target_dict.clear()
+
+
+
         print(self.target_dict == var_dict['geo'])
+
+
         
 
         self.target_dict[new_text] = self.target_dict.pop(self.item_text)
 
+
+        print(self.target_dict == var_dict['geo'])
+
         self.item_text = new_text
-        print()
-        self.parent.print_list_items()
+        print(self.item_text)
+        self.parent.print_list_items(if_print= True)
         print(f"Text input changed: {new_text}")
 
     
@@ -347,9 +522,9 @@ class CustomListWidget(QWidget):
         self.layout.addWidget(self.add_button)
 
         # Connect the signals for drag-and-drop operations
-        self.list_widget.model().rowsMoved.connect(self.print_list_items)
-        self.list_widget.model().rowsRemoved.connect(self.print_list_items)
-        self.list_widget.model().rowsInserted.connect(self.print_list_items)
+        self.list_widget.model().rowsMoved.connect(lambda: self.print_list_items(if_reorder = True))
+        self.list_widget.model().rowsRemoved.connect(lambda: self.print_list_items(if_reorder = True))
+        self.list_widget.model().rowsInserted.connect(lambda: self.print_list_items())
 
     def add_item(self):
         dialog = AddItemDialog(type = self.add_type, combo_list = self.add_combo.keys(),parent = self)
@@ -373,6 +548,7 @@ class CustomListWidget(QWidget):
                 temp_obj.material = var_dict['Material']['Vaccum']
                 temp_obj.label = values['name']
                 var_dict['geo'].update({values['name']:temp_obj})
+
 
             elif self.add_type == 'Sources':
 
@@ -497,7 +673,7 @@ class CustomListWidget(QWidget):
             self.list_widget.addItem(new_item_text)
             self.print_list_items()
 
-    def print_list_items(self, if_print = False):
+    def print_list_items(self, if_print = False, if_reorder = False):
         # Print all items in the list
         list_items = []
         print("Current list items:")
@@ -505,17 +681,17 @@ class CustomListWidget(QWidget):
             list_items.append(self.list_widget.item(index).text())
         if if_print:
             print(list_items)
+        if if_reorder:
+            if self.add_type == 'Structure':
 
-        if self.add_type == 'Structure':
+                var_dict['geo'] = {key: var_dict['geo'][key] for key in list_items}
 
-            var_dict['geo'] = {key: var_dict['geo'][key] for key in list_items}
+            elif self.add_type == 'Sources':
 
-        elif self.add_type == 'Sources':
+                var_dict['src'] = {key: var_dict['src'][key] for key in list_items}
 
-            var_dict['src'] = {key: var_dict['src'][key] for key in list_items}
-
-        elif self.add_type == 'Monitors':
-            pass
+            elif self.add_type == 'Monitors':
+                pass
 
 
         return list_items
@@ -779,9 +955,8 @@ class VispyPlotWidget(QWidget):
             self.canvas.unfreeze()
             
             # Get canvas and view from plot3D
-            mp_canvas = var_dict['CurrentSim'].plot3D()
-            mp_view = mp_canvas.central_widget.children[0]
-
+            mp_view = var_dict['CurrentSim'].plot3D().central_widget.children[0]
+            
             # Clear old view in canvas
             self.canvas.central_widget.remove_widget(self.view)
 
@@ -794,6 +969,10 @@ class VispyPlotWidget(QWidget):
 
             # Add new ViewBox to old canvax
             self.canvas.central_widget.add_widget(self.view)
+
+
+
+
 
 
             """
@@ -888,10 +1067,12 @@ class MainWindow(QMainWindow):
         self.tab1 = CustomListWidget(parent=self)
         self.tab2 = CustomListWidget(add_type= 'Sources', add_combo= var_dict['Sources'],parent=self)
         self.tab3 = CustomListWidget(parent=self)
+        self.tab4 = BoundaryTable()
 
         self.tab_widget.addTab(self.tab1, "Structures")
         self.tab_widget.addTab(self.tab2, "Sources")
         self.tab_widget.addTab(self.tab3, "Monitors")
+        self.tab_widget.addTab(self.tab4, "Boundaries")
 
         # Add the tab widget to the central layout
         self.central_layout.addWidget(self.tab_widget)

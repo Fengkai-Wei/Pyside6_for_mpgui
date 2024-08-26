@@ -5,4 +5,5 @@ b = mp.Vector3(1,1,0)
 c = np.array(a)*np.array([[1,1,0],
                         [0,1,1],
                         [1,0,1]])
-print(c)
+d = [None]*5
+print(d)
