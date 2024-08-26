@@ -70,7 +70,23 @@ def init():
         'CurrentSim':mp.Simulation(cell_size = mp.Vector3(2,2,2),resolution=50),
         'Monitors':{},
         'dft':{},
-        'Frequency':1/1.55
+        'Frequency':1/1.55,
+
+        'direction':{'X': mp.X,
+                     'Y': mp.Y,
+                     'Z': mp.Z,
+                     'R': mp.R,
+                     'P': mp.P,
+        },
+
+        'side':{'High': mp.High,
+                'Low': mp.Low,
+        },
+
+        'boundary_condition':{'Metallic': mp.Metallic,
+                              'Magnetic': mp.Magnetic,
+        },
+
 
 
                 }
