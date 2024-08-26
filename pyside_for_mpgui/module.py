@@ -20,12 +20,10 @@ from vispy.scene import visuals
 import global_vars
 from var_manage import add_var, rm_var
 global_vars.init()
-from  global_vars import var_dict
+from  global_vars import var_dict,reverse_dict
 
 mp.verbosity(0)
-def reverse_dict(from_dict, find_val):
-    key = next((k for k, v in from_dict.items() if v == find_val), None)
-    return key
+
 
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QDoubleSpinBox, QLabel
 from PySide6.QtCore import Signal, Qt
@@ -44,6 +42,12 @@ class BoundaryDialog(QDialog):
 
         # Create layout
         layout = QFormLayout(self)
+        self.current_bc = None
+        for item in var_dict['Boundary']:
+            if item.direction == self.mp_dir and item.side == self.mp_side:
+                self.current_bc = item
+
+
         for key,val in self.type.__dict__.items():
             show_attr = key
 
@@ -52,19 +56,26 @@ class BoundaryDialog(QDialog):
             
             if show_attr == 'thickness':
                 self.thickness = QDoubleSpinBox()
+                self.thickness.setValue(self.current_bc.thickness if self.current_bc else 0.1)
                 layout.addRow(f'{show_attr.capitalize()}:',self.thickness)
             elif show_attr == 'direction':
-                self.dircombo = QComboBox()
+                self.dircombo = QLabel(self.dir)
                 layout.addRow(f'{show_attr.capitalize()}:',self.dircombo)
             elif show_attr == 'side':
-                self.sidecombo = QComboBox()
+                self.sidecombo = QLabel(self.side)
                 layout.addRow(f'{show_attr.capitalize()}:',self.sidecombo)
-            elif show_attr == 'r_asymptotic':
-                self.r = QDoubleSpinBox()
-                layout.addRow(f'{show_attr.capitalize()}:',self.r)
+            elif show_attr == 'R_asymptotic':
+                self.r = QLineEdit()
+                r_asymp = self.current_bc._R_asymptotic if self.current_bc else 1e-15
+                self.r.setText(str(r_asymp))
+
+                layout.addRow(f'R Asymptotic:',self.r)
             elif show_attr == 'pml_profile':
-                self.pml = QPushButton('compile')
-                layout.addRow(f'{show_attr.capitalize()}:',self.pml)
+                self.pml_btn = QPushButton('View && Edit')
+                self.pml = self.current_bc.pml_profile if self.current_bc else None
+
+                self.pml_btn.setStyleSheet("color: blue; font-weight: bold;")
+                layout.addRow(f'PML Profile:',self.pml_btn)
             else:
                 continue
         
@@ -79,16 +90,30 @@ class BoundaryDialog(QDialog):
         layout.addRow(self.button_clear)
 
     def submit(self):
+        # Once the BC being submitted, all other types of BC will be deleted.
+
+        # Clear Metallic
+        print(vars(var_dict['CurrentSim'].fields.this))
+
+
+
+
+
+
         for item in var_dict['Boundary']:
             if item.direction == self.mp_dir and item.side == self.mp_side:
-                var_dict['Boundary']
+                item.thickness = self.thickness.value()
+                item._R_asymptotic = eval(self.r.text()) if eval(self.r.text()) <= 1e-15 else 1e-15
+                item.pml_profile = self.pml if self.pml else None
+
                 super().accept()
                 return
         
-        var_dict['Boundary'].append(self.type.__class__(#thickness = ,
+        var_dict['Boundary'].append(self.type.__class__(thickness = self.thickness.value(),
                                                         direction = self.mp_dir,
+                                                        
                                                         side = self.mp_side))
-        self.parent.setText(f'{type(self.type).__name__}, Thickness = ')
+        self.parent.setText(f'{type(self.type).__name__}, Thickness = {self.thickness.value()}')
         super().accept()
         
 
@@ -126,13 +151,9 @@ class ButtonComboBox(QPushButton):
         
 
         if option == 'Metallic' or option == 'Magnetic':
-            pass
-            side = var_dict['side'][side],
-            direction = var_dict['direction'][dir],
-            condition = var_dict['boundary_condition'][option]
-            var_dict['CurrentSim'].set_boundary(side = side,
-                                                direction = direction,
-                                                condition = condition)
+            var_dict['CurrentSim'].set_boundary(side = var_dict['side'][side],
+                                                direction = var_dict['direction'][dir],
+                                                condition = var_dict['boundary_condition'][option])
         elif option == 'PML' or option == 'Absorber':
             dialog = BoundaryDialog(dir = dir,
                                     side = side, 
@@ -851,6 +872,7 @@ class PlotWidget(QWidget):
             sim.geometry = geometry
             sim.sources = sources
             sim.dft_object = dft_objects
+            sim.boundary_layers = var_dict['Boundary']
 
             self.ax.clear()
             sim.plot2D(ax = self.ax, output_plane = self.output_plane,labels =False,label_geometry = False)

@@ -5,6 +5,21 @@ def dummy_src(time):
     return (np.sin(time))
 
 
+def reverse_dict(from_dict, find_val):
+    key = next((k for k, v in from_dict.items() if v == find_val), None)
+    return key
+
+def reload_BC(sim, reload_list):
+    sim.restart_fields()
+    for item in reload_list:
+        sim.set_boundary(side = item.side,
+                         direction = item.direction,
+                         condition = item.condition)
+
+def reload_mnt(reload_list):
+    pass
+
+
 
 
 
