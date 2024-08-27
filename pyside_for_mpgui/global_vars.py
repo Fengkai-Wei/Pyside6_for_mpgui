@@ -9,7 +9,7 @@ def reverse_dict(from_dict, find_val):
     key = next((k for k, v in from_dict.items() if v == find_val), None)
     return key
 
-def reload_BC(sim, reload_list):
+def reload_BC(sim, reload_list=[]):
     sim.restart_fields()
     for item in reload_list:
         sim.set_boundary(side = item.side,
@@ -83,6 +83,7 @@ def init():
 
         'Boundary':[],
         'CurrentSim':mp.Simulation(cell_size = mp.Vector3(2,2,2),resolution=50),
+        
         'Monitors':{},
         'dft':{},
         'Frequency':1/1.55,

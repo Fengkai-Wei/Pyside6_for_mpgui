@@ -2,7 +2,7 @@ import sys
 import numpy as np
 import meep as mp
 
-from PySide6.QtWidgets import (QSizePolicy,QTableWidget, QMainWindow,QHeaderView, QLabel,QSpinBox, QPushButton, QVBoxLayout, QHBoxLayout, QWidget,QToolTip, QListWidget, QListWidgetItem, QMenu, QMessageBox, QDialog, QFormLayout, QLineEdit, QComboBox, QSlider, QDoubleSpinBox, QTabWidget, QGridLayout)
+from PySide6.QtWidgets import (QSizePolicy,QTableWidget,QCheckBox, QMainWindow,QHeaderView, QLabel,QSpinBox, QPushButton, QVBoxLayout, QHBoxLayout, QWidget,QToolTip, QListWidget, QListWidgetItem, QMenu, QMessageBox, QDialog, QFormLayout, QLineEdit, QComboBox, QSlider, QDoubleSpinBox, QTabWidget, QGridLayout)
 from PySide6.QtGui import QAction, QFontMetrics, QCursor
 from PySide6.QtCore import QTimer, QPoint,Qt
 import copy
@@ -20,7 +20,7 @@ from vispy.scene import visuals
 import global_vars
 from var_manage import add_var, rm_var
 global_vars.init()
-from  global_vars import var_dict,reverse_dict
+from  global_vars import var_dict,reverse_dict,reload_BC
 
 mp.verbosity(0)
 
@@ -37,6 +37,9 @@ class BoundaryDialog(QDialog):
         self.type = pml_type
         self.mp_dir = var_dict['direction'][self.dir]
         self.mp_side = var_dict['side'][self.side]
+
+        self.same_dir = self.parent.parent.same_dir
+        self.all_dir = self.parent.parent.all_dir
 
         self.setWindowTitle(f'{type(self.type).__name__} Layer{self.dir, self.side}')
 
@@ -79,6 +82,18 @@ class BoundaryDialog(QDialog):
             else:
                 continue
         
+        self.same_dir_check = QCheckBox()
+        self.same_dir_check.setChecked(self.same_dir)
+        self.same_dir_check.setEnabled(not self.all_dir)
+        
+
+        self.all_dir_check = QCheckBox()
+        self.all_dir_check.setChecked(self.all_dir)
+
+        layout.addRow(f'BOTH side of {self.dir}:',self.same_dir_check)
+        layout.addRow('ALL XYZ directions:',self.all_dir_check)
+
+        self.all_dir_check.stateChanged.connect(self.same_all_switch)
 
         self.button_clear = QPushButton('Clear')
         self.button_clear.setStyleSheet("color: red; font-weight: bold;")
@@ -86,35 +101,59 @@ class BoundaryDialog(QDialog):
 
         self.button_submit = QPushButton('Submit')
         self.button_submit.clicked.connect(self.submit)
+
+
         layout.addRow(self.button_submit)
         layout.addRow(self.button_clear)
 
+    def same_all_switch(self):
+        if self.all_dir_check.isChecked():
+            self.same_dir_check.setEnabled(False)
+
+        else:
+            self.same_dir_check.setEnabled(True)
+
     def submit(self):
-        # Once the BC being submitted, all other types of BC will be deleted.
-
-        # Clear Metallic
-        print(vars(var_dict['CurrentSim'].fields.this))
-
-
-
-
-
-
-        for item in var_dict['Boundary']:
-            if item.direction == self.mp_dir and item.side == self.mp_side:
-                item.thickness = self.thickness.value()
-                item._R_asymptotic = eval(self.r.text()) if eval(self.r.text()) <= 1e-15 else 1e-15
-                item.pml_profile = self.pml if self.pml else None
-
-                super().accept()
-                return
+        if self.all_dir_check.isChecked():
+            self.parent.parent.all_dir = True
+            var_dict['Boundary'] = []
+            var_dict['Boundary'].append(self.type.__class__(thickness = self.thickness.value(),
+                                                            R_asymptotic = eval(self.r.text()) if eval(self.r.text()) <= 1e-15 else 1e-15,
+                                                            direction = mp.ALL,
+                                                            side = mp.ALL))
+            
+        elif self.same_dir_check.isChecked():
+            self.parent.parent.same_dir = True
+            self.parent.parent.all_dir = False
+            for item in var_dict['Boundary']:
+                if item.direction == self.mp_dir or item.direction == mp.ALL:
+                    var_dict['Boundary'].remove(item)
+            var_dict['Boundary'].append(self.type.__class__(thickness = self.thickness.value(),
+                                                            R_asymptotic = eval(self.r.text()) if eval(self.r.text()) <= 1e-15 else 1e-15,
+                                                            direction = self.mp_dir,
+                                                            side = mp.ALL))
         
-        var_dict['Boundary'].append(self.type.__class__(thickness = self.thickness.value(),
-                                                        direction = self.mp_dir,
-                                                        
-                                                        side = self.mp_side))
-        self.parent.setText(f'{type(self.type).__name__}, Thickness = {self.thickness.value()}')
-        super().accept()
+        else:
+            self.parent.parent.same_dir = False
+            self.parent.parent.all_dir = False
+
+            for item in var_dict['Boundary']:
+                if (item.direction == mp.ALL) or (item.direction == self.mp_dir and item.side == mp.ALL):
+                    var_dict['Boundary'].remove(item)
+                elif item.direction == self.mp_dir and item.side == self.mp_side:
+                    item.thickness = self.thickness.value()
+                    item._R_asymptotic = eval(self.r.text()) if eval(self.r.text()) <= 1e-15 else 1e-15
+                    item.pml_profile = self.pml if self.pml else None
+
+                    super().accept()
+                    return
+            
+            var_dict['Boundary'].append(self.type.__class__(thickness = self.thickness.value(),
+                                                            direction = self.mp_dir,
+                                                            R_asymptotic = eval(self.r.text()) if eval(self.r.text()) <= 1e-15 else 1e-15,
+                                                            side = self.mp_side))
+            self.parent.setText(f'{type(self.type).__name__}, Thickness = {self.thickness.value()}')
+            super().accept()
         
 
 
@@ -124,20 +163,22 @@ class BoundaryDialog(QDialog):
             if item.direction == self.mp_dir and item.side == self.mp_side:
                 var_dict['Boundary'].remove(item)
                 break
-        self.parent.setText('Select an Boundary Condition')
+        self.parent.setText('No PML')
         super().accept()
 
 class ButtonComboBox(QPushButton):
     def __init__(self, options, direction, side, parent=None):
         super().__init__(parent)
-        self.setText('Select an Boundary Condition')
+        self.setText('No PML')
         self.options = options
         self.parent = parent
-        
+        self.same_dir = self.parent.same_dir
+        self.all_dir = self.parent.all_dir
         # 创建一个菜单，并将按钮作为选项添加到菜单中
         self.menu = QMenu(self)
         self.setMenu(self.menu)
-        self.setStyleSheet("QMenu { width: 150px; }")
+
+
         
         for option in options:
             action = QAction(option, self)
@@ -151,9 +192,13 @@ class ButtonComboBox(QPushButton):
         
 
         if option == 'Metallic' or option == 'Magnetic':
+            
             var_dict['CurrentSim'].set_boundary(side = var_dict['side'][side],
                                                 direction = var_dict['direction'][dir],
                                                 condition = var_dict['boundary_condition'][option])
+ 
+
+            
         elif option == 'PML' or option == 'Absorber':
             dialog = BoundaryDialog(dir = dir,
                                     side = side, 
@@ -167,7 +212,10 @@ class ButtonComboBox(QPushButton):
 
 class BoundaryTable(QWidget):
     def __init__(self):
-        super().__init__()
+        super().__init__() 
+
+        self.same_dir = False
+        self.all_dir = False
 
         # 创建 QWidget 和布局
         layout = QVBoxLayout()
@@ -188,7 +236,7 @@ class BoundaryTable(QWidget):
         self.table_widget.setVerticalHeaderLabels(row_list)
         
         # 创建按钮选项
-        options = ['PML', 'Absorber', 'Periodic', 'Metallic', 'Magnetic']
+        options = ['PML', 'Absorber(PML)', 'Periodic', 'Metallic', 'Magnetic']
         
         # 将自定义 ButtonComboBox 添加到每个单元格中
         for row in range(3):
@@ -211,8 +259,22 @@ class BoundaryTable(QWidget):
         
         # 将表格添加到布局中
         layout.addWidget(self.table_widget)
-        self.setLayout(layout)
+        
         # 设置主窗口的中央部件
+
+        self.setLayout(layout)
+    def update_BC_table(self):
+        for item in var_dict['Boundary']:
+            if item.direction  == mp.ALL:
+                for row in range(self.table_widget.rowCount()):
+                    for column in range(self.table_widget.columnCount()):
+                        cell = self.table_widget.item(row=row,column=column)
+                        cell.setText(f'{type(cell.type).__name__}, ')
+
+                break
+
+            else:
+                pass
 
 
 
