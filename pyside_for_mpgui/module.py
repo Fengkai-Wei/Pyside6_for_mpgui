@@ -2,7 +2,7 @@ import sys
 import numpy as np
 import meep as mp
 
-from PySide6.QtWidgets import (QSizePolicy,QTableWidget,QCheckBox, QMainWindow,QHeaderView, QLabel,QSpinBox, QPushButton, QVBoxLayout, QHBoxLayout, QWidget,QToolTip, QListWidget, QListWidgetItem, QMenu, QMessageBox, QDialog, QFormLayout, QLineEdit, QComboBox, QSlider, QDoubleSpinBox, QTabWidget, QGridLayout)
+from PySide6.QtWidgets import (QMenuBar,QRadioButton,QButtonGroup, QSizePolicy,QTableWidget,QCheckBox, QMainWindow,QHeaderView, QLabel,QSpinBox, QPushButton, QVBoxLayout, QHBoxLayout, QWidget,QToolTip, QListWidget, QListWidgetItem, QMenu, QMessageBox, QDialog, QFormLayout, QLineEdit, QComboBox, QSlider, QDoubleSpinBox, QTabWidget, QGridLayout)
 from PySide6.QtGui import QAction, QFontMetrics, QCursor
 from PySide6.QtCore import QTimer, QPoint,Qt
 import copy
@@ -28,253 +28,6 @@ mp.verbosity(0)
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QDoubleSpinBox, QLabel
 from PySide6.QtCore import Signal, Qt
 
-class BoundaryDialog(QDialog):
-    def __init__(self,side,dir,pml_type,parent=None):
-        super().__init__(parent)
-        self.parent = parent
-        self.side = side
-        self.dir = dir
-        self.type = pml_type
-        self.mp_dir = var_dict['direction'][self.dir]
-        self.mp_side = var_dict['side'][self.side]
-
-        self.same_dir = self.parent.parent.same_dir
-        self.all_dir = self.parent.parent.all_dir
-
-        self.setWindowTitle(f'{type(self.type).__name__} Layer{self.dir, self.side}')
-
-        # Create layout
-        layout = QFormLayout(self)
-        self.current_bc = None
-        for item in var_dict['Boundary']:
-            if item.direction == self.mp_dir and item.side == self.mp_side:
-                self.current_bc = item
-
-
-        for key,val in self.type.__dict__.items():
-            show_attr = key
-
-            if key[0] == '_':
-                show_attr = key[1:]
-            
-            if show_attr == 'thickness':
-                self.thickness = QDoubleSpinBox()
-                self.thickness.setValue(self.current_bc.thickness if self.current_bc else 0.1)
-                layout.addRow(f'{show_attr.capitalize()}:',self.thickness)
-            elif show_attr == 'direction':
-                self.dircombo = QLabel(self.dir)
-                layout.addRow(f'{show_attr.capitalize()}:',self.dircombo)
-            elif show_attr == 'side':
-                self.sidecombo = QLabel(self.side)
-                layout.addRow(f'{show_attr.capitalize()}:',self.sidecombo)
-            elif show_attr == 'R_asymptotic':
-                self.r = QLineEdit()
-                r_asymp = self.current_bc._R_asymptotic if self.current_bc else 1e-15
-                self.r.setText(str(r_asymp))
-
-                layout.addRow(f'R Asymptotic:',self.r)
-            elif show_attr == 'pml_profile':
-                self.pml_btn = QPushButton('View && Edit')
-                self.pml = self.current_bc.pml_profile if self.current_bc else None
-
-                self.pml_btn.setStyleSheet("color: blue; font-weight: bold;")
-                layout.addRow(f'PML Profile:',self.pml_btn)
-            else:
-                continue
-        
-        self.same_dir_check = QCheckBox()
-        self.same_dir_check.setChecked(self.same_dir)
-        self.same_dir_check.setEnabled(not self.all_dir)
-        
-
-        self.all_dir_check = QCheckBox()
-        self.all_dir_check.setChecked(self.all_dir)
-
-        layout.addRow(f'BOTH side of {self.dir}:',self.same_dir_check)
-        layout.addRow('ALL XYZ directions:',self.all_dir_check)
-
-        self.all_dir_check.stateChanged.connect(self.same_all_switch)
-
-        self.button_clear = QPushButton('Clear')
-        self.button_clear.setStyleSheet("color: red; font-weight: bold;")
-        self.button_clear.clicked.connect(self.clear)
-
-        self.button_submit = QPushButton('Submit')
-        self.button_submit.clicked.connect(self.submit)
-
-
-        layout.addRow(self.button_submit)
-        layout.addRow(self.button_clear)
-
-    def same_all_switch(self):
-        if self.all_dir_check.isChecked():
-            self.same_dir_check.setEnabled(False)
-
-        else:
-            self.same_dir_check.setEnabled(True)
-
-    def submit(self):
-        if self.all_dir_check.isChecked():
-            self.parent.parent.all_dir = True
-            var_dict['Boundary'] = []
-            var_dict['Boundary'].append(self.type.__class__(thickness = self.thickness.value(),
-                                                            R_asymptotic = eval(self.r.text()) if eval(self.r.text()) <= 1e-15 else 1e-15,
-                                                            direction = mp.ALL,
-                                                            side = mp.ALL))
-            
-        elif self.same_dir_check.isChecked():
-            self.parent.parent.same_dir = True
-            self.parent.parent.all_dir = False
-            for item in var_dict['Boundary']:
-                if item.direction == self.mp_dir or item.direction == mp.ALL:
-                    var_dict['Boundary'].remove(item)
-            var_dict['Boundary'].append(self.type.__class__(thickness = self.thickness.value(),
-                                                            R_asymptotic = eval(self.r.text()) if eval(self.r.text()) <= 1e-15 else 1e-15,
-                                                            direction = self.mp_dir,
-                                                            side = mp.ALL))
-        
-        else:
-            self.parent.parent.same_dir = False
-            self.parent.parent.all_dir = False
-
-            for item in var_dict['Boundary']:
-                if (item.direction == mp.ALL) or (item.direction == self.mp_dir and item.side == mp.ALL):
-                    var_dict['Boundary'].remove(item)
-                elif item.direction == self.mp_dir and item.side == self.mp_side:
-                    item.thickness = self.thickness.value()
-                    item._R_asymptotic = eval(self.r.text()) if eval(self.r.text()) <= 1e-15 else 1e-15
-                    item.pml_profile = self.pml if self.pml else None
-
-                    super().accept()
-                    return
-            
-            var_dict['Boundary'].append(self.type.__class__(thickness = self.thickness.value(),
-                                                            direction = self.mp_dir,
-                                                            R_asymptotic = eval(self.r.text()) if eval(self.r.text()) <= 1e-15 else 1e-15,
-                                                            side = self.mp_side))
-            self.parent.setText(f'{type(self.type).__name__}, Thickness = {self.thickness.value()}')
-            super().accept()
-        
-
-
-    
-    def clear(self):
-        for item in var_dict['Boundary']:
-            if item.direction == self.mp_dir and item.side == self.mp_side:
-                var_dict['Boundary'].remove(item)
-                break
-        self.parent.setText('No PML')
-        super().accept()
-
-class ButtonComboBox(QPushButton):
-    def __init__(self, options, direction, side, parent=None):
-        super().__init__(parent)
-        self.setText('No PML')
-        self.options = options
-        self.parent = parent
-        self.same_dir = self.parent.same_dir
-        self.all_dir = self.parent.all_dir
-        # 创建一个菜单，并将按钮作为选项添加到菜单中
-        self.menu = QMenu(self)
-        self.setMenu(self.menu)
-
-
-        
-        for option in options:
-            action = QAction(option, self)
-            action.triggered.connect(lambda checked, opt=option: self.on_option_selected(opt,direction,side))
-            self.menu.addAction(action)
-    
-    def on_option_selected(self, option,dir,side):
-        #self.setText(option)
-        print(f'I am {option} at {dir}.{side}')
-
-        
-
-        if option == 'Metallic' or option == 'Magnetic':
-            
-            var_dict['CurrentSim'].set_boundary(side = var_dict['side'][side],
-                                                direction = var_dict['direction'][dir],
-                                                condition = var_dict['boundary_condition'][option])
- 
-
-            
-        elif option == 'PML' or option == 'Absorber':
-            dialog = BoundaryDialog(dir = dir,
-                                    side = side, 
-                                    pml_type = mp.PML(thickness = 0.1) if option == 'PML' else mp.Absorber(thickness = 0.1),
-                                    parent = self)
-            if dialog.exec():
-
-                pass
-        elif option == 'Periodic':
-            pass
-
-class BoundaryTable(QWidget):
-    def __init__(self):
-        super().__init__() 
-
-        self.same_dir = False
-        self.all_dir = False
-
-        # 创建 QWidget 和布局
-        layout = QVBoxLayout()
-
-        # 创建 QTableWidget
-        self.table_widget = QTableWidget()
-        
-        # 设置行数和列数
-        self.table_widget.setRowCount(3)
-        self.table_widget.setColumnCount(2)
-        
-        # 设置列标题
-        col_list = ['Low', 'High']
-        self.table_widget.setHorizontalHeaderLabels(col_list)
-        
-        # 设置行标题
-        row_list = ['X', 'Y', 'Z']
-        self.table_widget.setVerticalHeaderLabels(row_list)
-        
-        # 创建按钮选项
-        options = ['PML', 'Absorber(PML)', 'Periodic', 'Metallic', 'Magnetic']
-        
-        # 将自定义 ButtonComboBox 添加到每个单元格中
-        for row in range(3):
-            for col in range(2):
-                button_combo = ButtonComboBox(side=col_list[col],
-                                              direction = row_list[row],
-                                              options=options,
-                                              parent=self)
-                self.table_widget.setCellWidget(row, col, button_combo)
-
-        # 设置表头字体为粗体
-        self.table_widget.horizontalHeader().setStyleSheet("font-weight: bold;")
-        self.table_widget.verticalHeader().setStyleSheet("font-weight: bold;")
-
-        # 设置行高和列宽
-        self.table_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        # 设置表格的列宽和行高可以自动调整
-        self.table_widget.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.table_widget.verticalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        
-        # 将表格添加到布局中
-        layout.addWidget(self.table_widget)
-        
-        # 设置主窗口的中央部件
-
-        self.setLayout(layout)
-    def update_BC_table(self):
-        for item in var_dict['Boundary']:
-            if item.direction  == mp.ALL:
-                for row in range(self.table_widget.rowCount()):
-                    for column in range(self.table_widget.columnCount()):
-                        cell = self.table_widget.item(row=row,column=column)
-                        cell.setText(f'{type(cell.type).__name__}, ')
-
-                break
-
-            else:
-                pass
 
 
 
@@ -600,7 +353,7 @@ class CustomListWidget(QWidget):
         self.add_button.clicked.connect(self.add_item)
 
         # Layout configuration
-        self.layout = QHBoxLayout(self)
+        self.layout = QVBoxLayout(self)
         self.layout.addWidget(self.list_widget)
         self.layout.addWidget(self.add_button)
 
@@ -1083,9 +836,152 @@ class VispyPlotWidget(QWidget):
             view = canvas.central_widget.add_view()
             view.camera = 'turntable'
 
-            
 
+
+class PMLDiaLog(QDialog):
+    def __init__(self, label):
+        super().__init__()
         
+        self.label = label
+        self.setWindowTitle('PML Setting')
+
+        layout = QFormLayout()
+        self.thickness = QDoubleSpinBox()
+        self.is_abs = QCheckBox('Absorber Layer')
+        self.thickness.setValue(0.0)
+        for i in var_dict['Boundary']:
+            if i.direction == self.label[0] and i.side == self.label[1]:
+                self.thickness.setValue(i.thickenss)
+                if isinstance(i,mp.Absorber):
+                    self.is_abs.setChecked(True)
+        self.submit_btn = QPushButton('submit')
+        self.submit_btn.clicked.connect(self.submit)
+
+        layout.addRow('Thickness:',self.thickness)
+        layout.addRow(self.is_abs)
+        layout.addRow(self.submit_btn)
+
+
+
+
+
+        self.setLayout(layout)
+    
+    def submit(self):
+        for i in var_dict['Boundary']:
+            if i.direction == self.label[0] and i.side == self.label[1]:
+                if (isinstance(i, mp.Absorber) and self.is_abs.isChecked()) or (isinstance(i, mp.PML) and not self.is_abs.isChecked()):
+                    i.thickness = self.thickness.value()
+                    pass
+                else:
+                    var_dict['Boundary'].remove(i)
+                    if self.is_abs.isChecked():
+                        var_dict['Boundary'].append(mp.Absorber(thickness=self.thickness.value()))
+                    else:
+                        var_dict['Boundary'].append(mp.PML(thickness=self.thickness.value()))
+                super().accept()
+        var_dict['Boundary'].append(mp.Absorber(thickness=self.thickness.value()) if self.is_abs.isChecked() else mp.PML(thickness=self.thickness.value()))
+        super().accept()
+
+class BoundaryDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle('Boundary Conditions')
+        mainlayout = QHBoxLayout()
+        layout = QGridLayout()
+        
+        self.low = QLabel('Low')
+        self.high = QLabel('High')
+        self.x_label = QLabel('X')
+        self.y_label = QLabel('Y')
+        self.z_label = QLabel('Z')
+
+        for row in range(3):
+            for col in range(2):
+                widget = QPushButton('E')
+                widget.label = (row, col)
+                widget.clicked.connect(self.edit)
+                layout.addWidget(widget,row+1,col+1)
+
+
+
+        self.k_point_btn = QPushButton('Bloch\nCondition')
+        layout.addWidget(self.x_label,1,0)
+        layout.addWidget(self.y_label,2,0)
+        layout.addWidget(self.z_label,3,0)
+        layout.addWidget(self.high,0,1)
+        layout.addWidget(self.low,0,2)
+
+
+        layout.setAlignment(Qt.AlignCenter)
+        mainlayout.addLayout(layout)
+        sidelayout = QVBoxLayout()
+
+        sidelayout.addWidget(self.k_point_btn)
+
+        mainlayout.addLayout(sidelayout)
+        self.setLayout(mainlayout)
+            
+    def edit(self):
+        sender = self.sender()
+        dialog = PMLDiaLog(label = sender.label)
+        if dialog.exec():
+            pass
+class MenuBar(QMenuBar):
+    def __init__(self, parent = None):
+        super().__init__(parent)
+        # 创建“文件”菜单
+        file_menu = self.addMenu("Files")
+        self.add_file_menu_items(file_menu)
+
+        # 创建“编辑”菜单
+        sim_menu = self.addMenu("Simulation")
+        self.add_sim_menu_items(sim_menu)
+
+        # 创建“查看”菜单
+        view_menu = self.addMenu("Results")
+        self.add_view_menu_items(view_menu)
+
+        # 创建“帮助”菜单
+        help_menu = self.addMenu("Help")
+        self.add_help_menu_items(help_menu)
+
+    def add_file_menu_items(self, file_menu):
+        new_action = QAction("New", self)
+        open_action = QAction("Open", self)
+        save_action = QAction("Save", self)
+        exit_action = QAction("Exit", self)
+        file_menu.addAction(new_action)
+        file_menu.addAction(open_action)
+        file_menu.addAction(save_action)
+        file_menu.addSeparator()
+        file_menu.addAction(exit_action)
+
+    def add_sim_menu_items(self, sim_menu):
+        BC_action = QAction("Boundary", self)
+        const_action = QAction('Constants',self)
+        BC_action.triggered.connect(self.edit_BC)
+        sim_menu.addAction(BC_action)
+        sim_menu.addAction(const_action)
+
+    def edit_BC(self):
+        dialog = BoundaryDialog()
+        if dialog.exec():
+            pass
+
+
+
+    def add_view_menu_items(self, view_menu):
+        zoom_in_action = QAction("Zoom In", self)
+        zoom_out_action = QAction("Zoom out", self)
+        full_screen_action = QAction("Fullscreen", self)
+        view_menu.addAction(zoom_in_action)
+        view_menu.addAction(zoom_out_action)
+        view_menu.addAction(full_screen_action)
+
+    def add_help_menu_items(self, help_menu):
+        about_action = QAction("About", self)
+        help_menu.addAction(about_action)      
 
 
 
@@ -1093,10 +989,12 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("My Application")
+        self.setWindowTitle("MEEP Application")
         #self.setGeometry(0, 0, 1000, 1000)  # Adjust window size for layout
 
-
+        # Add menu bar
+        menu_bar = MenuBar(self)
+        self.setMenuBar(menu_bar)
 
         # Create a central widget
         central_widget = QWidget()
@@ -1150,13 +1048,12 @@ class MainWindow(QMainWindow):
         # Create and add tabs
         self.tab1 = CustomListWidget(parent=self)
         self.tab2 = CustomListWidget(add_type= 'Sources', add_combo= var_dict['Sources'],parent=self)
-        self.tab3 = CustomListWidget(parent=self)
-        self.tab4 = BoundaryTable()
+        self.tab3 = CustomListWidget(parent=self, add_type = 'Monitors', add_combo = var_dict['Monitors'],parents = self)
+
 
         self.tab_widget.addTab(self.tab1, "Structures")
         self.tab_widget.addTab(self.tab2, "Sources")
         self.tab_widget.addTab(self.tab3, "Monitors")
-        self.tab_widget.addTab(self.tab4, "Boundaries")
 
         # Add the tab widget to the central layout
         self.central_layout.addWidget(self.tab_widget)

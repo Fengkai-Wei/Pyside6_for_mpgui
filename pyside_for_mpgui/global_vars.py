@@ -84,7 +84,9 @@ def init():
         'Boundary':[],
         'CurrentSim':mp.Simulation(cell_size = mp.Vector3(2,2,2),resolution=50),
         
-        'Monitors':{},
+        'Monitors':{
+            
+        },
         'dft':{},
         'Frequency':1/1.55,
 

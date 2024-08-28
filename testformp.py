@@ -1,244 +1,124 @@
-import matplotlib.pyplot as plt
-import numpy as np
-
 import meep as mp
+import numpy as np
+import math
+import matplotlib.pyplot as plt
 
-resolution = 50  # pixels/μm
+# True:  plot the scattered fields in the air region adjacent to the grating
+# False: plot the diffraction spectra based on a 1d cross section of the scattered fields
+field_profile = True
 
-dpml = 1.0  # PML thickness
-dsub = 2.0  # substrate thickness
-dpad = 2.0  # padding between grating and PML
+resolution = 50         # pixels/μm
 
-lcen = 0.5  # center wavelength
-fcen = 1 / lcen  # center frequency
-df = 0.2 * fcen  # frequency width
+dpml = 1.0              # PML thickness
+dsub = 2.0              # substrate thickness
+dpad = 1.0              # flat-surface padding
+gp = 1.0                # grating periodicity
+gh = 0.5                # grating height
+gdc = 0.5               # grating duty cycle
+num_cells = 5           # number of grating unit cells
 
-focal_length = 200  # focal length of metalens
-spot_length = 100  # far field line length
-ff_res = 10  # far field resolution (points/μm)
+# air region thickness adjacent to grating
+dair = 10 if field_profile else dpad
 
-k_point = mp.Vector3(0, 0, 0)
+wvl = 0.5               # center wavelength
+fcen = 1/wvl            # center frequency
+
+k_point = mp.Vector3()
 
 glass = mp.Medium(index=1.5)
 
-pml_layers = [mp.PML(thickness=dpml, direction=mp.X)]
+pml_layers = [mp.PML(thickness=dpml)]
 
-symmetries = [mp.Mirror(mp.Y)]
+symmetries=[mp.Mirror(mp.Y)]
 
+sx = dpml+dsub+gh+dair+dpml
+sy = dpml+dpad+num_cells*gp+dpad+dpml
+cell_size = mp.Vector3(sx,sy)
 
-def grating(gp, gh, gdc_list):
-    sx = dpml + dsub + gh + dpad + dpml
-    src_pt = mp.Vector3(-0.5 * sx + dpml + 0.5 * dsub)
-    mon_pt = mp.Vector3(0.5 * sx - dpml - 0.5 * dpad)
-    geometry = [
-        mp.Block(
-            material=glass,
-            size=mp.Vector3(dpml + dsub, mp.inf, mp.inf),
-            center=mp.Vector3(-0.5 * sx + 0.5 * (dpml + dsub)),
-        )
-    ]
+src_pt = mp.Vector3(-0.5*sx+dpml+0.5*dsub)
+sources = [mp.Source(mp.GaussianSource(fcen,fwidth=0.2*fcen,is_integrated=True),
+                     component=mp.Ez,
+                     center=src_pt,
+                     size=mp.Vector3(y=sy))]
 
-    num_cells = len(gdc_list)
-    if num_cells == 1:
-        sy = gp
-        cell_size = mp.Vector3(sx, sy, 0)
+geometry = [mp.Block(material=glass,
+                     size=mp.Vector3(dpml+dsub,mp.inf,mp.inf),
+                     center=mp.Vector3(-0.5*sx+0.5*(dpml+dsub)))]
 
-        sources = [
-            mp.Source(
-                mp.GaussianSource(fcen, fwidth=df),
-                component=mp.Ez,
-                center=src_pt,
-                size=mp.Vector3(y=sy),
-            )
-        ]
+sim = mp.Simulation(resolution=resolution,
+                    cell_size=cell_size,
+                    boundary_layers=pml_layers,
+                    geometry=geometry,
+                    k_point=k_point,
+                    sources=sources,
+                    symmetries=symmetries)
 
-        sim = mp.Simulation(
-            resolution=resolution,
-            cell_size=cell_size,
-            boundary_layers=pml_layers,
-            k_point=k_point,
-            default_material=glass,
-            sources=sources,
-            symmetries=symmetries,
-        )
+mon_pt = mp.Vector3(0.5*sx-dpml-0.5*dair)
+near_fields = sim.add_dft_fields([mp.Ez], fcen, 0, 1, center=mon_pt, size=mp.Vector3(dair if field_profile else 0,sy-2*dpml))
 
-        flux_obj = sim.add_flux(
-            fcen, 0, 1, mp.FluxRegion(center=mon_pt, size=mp.Vector3(y=sy))
-        )
+sim.run(until_after_sources=100)
 
-        sim.run(until_after_sources=50)
+flat_dft = sim.get_dft_array(near_fields, mp.Ez, 0)
 
-        input_flux = mp.get_fluxes(flux_obj)
+sim.reset_meep()
 
-        sim.reset_meep()
+for j in range(num_cells):
+  geometry.append(mp.Block(material=glass,
+                           size=mp.Vector3(gh,gdc*gp,mp.inf),
+                           center=mp.Vector3(-0.5*sx+dpml+dsub+0.5*gh,-0.5*sy+dpml+dpad+(j+0.5)*gp)))
 
-        geometry.append(
-            mp.Block(
-                material=glass,
-                size=mp.Vector3(gh, gdc_list[0] * gp, mp.inf),
-                center=mp.Vector3(-0.5 * sx + dpml + dsub + 0.5 * gh),
-            )
-        )
+sim = mp.Simulation(resolution=resolution,
+                    cell_size=cell_size,
+                    boundary_layers=pml_layers,
+                    geometry=geometry,
+                    k_point=k_point,
+                    sources=sources,
+                    symmetries=symmetries)
 
-        sim = mp.Simulation(
-            resolution=resolution,
-            cell_size=cell_size,
-            boundary_layers=pml_layers,
-            geometry=geometry,
-            k_point=k_point,
-            sources=sources,
-            symmetries=symmetries,
-        )
+near_fields = sim.add_dft_fields([mp.Ez], fcen, 0, 1, center=mon_pt, size=mp.Vector3(dair if field_profile else 0,sy-2*dpml))
 
-        flux_obj = sim.add_flux(
-            fcen, 0, 1, mp.FluxRegion(center=mon_pt, size=mp.Vector3(y=sy))
-        )
+sim.run(until_after_sources=100)
 
-        sim.run(until_after_sources=200)
+grating_dft = sim.get_dft_array(near_fields, mp.Ez, 0)
 
-        freqs = mp.get_eigenmode_freqs(flux_obj)
-        res = sim.get_eigenmode_coefficients(
-            flux_obj, [1], eig_parity=mp.ODD_Z + mp.EVEN_Y
-        )
-        coeffs = res.alpha
+scattered_field = grating_dft-flat_dft
+scattered_amplitude = np.abs(scattered_field)**2
 
-        mode_tran = abs(coeffs[0, 0, 0]) ** 2 / input_flux[0]
-        mode_phase = np.angle(coeffs[0, 0, 0])
-        if mode_phase > 0:
-            mode_phase -= 2 * np.pi
+[x,y,z,w] = sim.get_array_metadata(dft_cell=near_fields)
 
-        return mode_tran, mode_phase
+if field_profile:
+  if mp.am_master():
+    plt.figure(dpi=150)
+    plt.pcolormesh(x,y,np.rot90(scattered_amplitude),cmap='inferno',shading='gouraud',vmin=0,vmax=scattered_amplitude.max())
+    plt.gca().set_aspect('equal')
+    plt.xlabel('x (μm)')
+    plt.ylabel('y (μm)')
 
-    else:
-        sy = num_cells * gp
-        cell_size = mp.Vector3(sx, sy, 0)
+    # ensure that the height of the colobar matches that of the plot
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+    divider = make_axes_locatable(plt.gca())
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    plt.colorbar(cax=cax)
+    plt.tight_layout()
+    plt.show()
+else:
+  ky = np.fft.fftshift(np.fft.fftfreq(len(scattered_field), 1/resolution))
+  FT_scattered_field = np.fft.fftshift(np.fft.fft(scattered_field))
+  if mp.am_master():
+    plt.figure(dpi=150)
+    plt.subplots_adjust(hspace=0.3)
 
-        sources = [
-            mp.Source(
-                mp.GaussianSource(fcen, fwidth=df),
-                component=mp.Ez,
-                center=src_pt,
-                size=mp.Vector3(y=sy),
-            )
-        ]
+    plt.subplot(2,1,1)
+    plt.plot(y,scattered_amplitude,'bo-')
+    plt.xlabel("y (μm)")
+    plt.ylabel("field amplitude")
 
-        geometry.extend(
-            mp.Block(
-                material=glass,
-                size=mp.Vector3(gh, gdc_list[j] * gp, mp.inf),
-                center=mp.Vector3(
-                    -0.5 * sx + dpml + dsub + 0.5 * gh, -0.5 * sy + (j + 0.5) * gp
-                ),
-            )
-            for j in range(num_cells)
-        )
-        sim = mp.Simulation(
-            resolution=resolution,
-            cell_size=cell_size,
-            boundary_layers=pml_layers,
-            geometry=geometry,
-            k_point=k_point,
-            sources=sources,
-            symmetries=symmetries,
-        )
+    plt.subplot(2,1,2)
+    plt.plot(ky,np.abs(FT_scattered_field)**2,'ro-')
+    plt.gca().ticklabel_format(axis='y',style='sci',scilimits=(0,0))
+    plt.xlabel(r'wavevector k$_y$, 2π (μm)$^{-1}$')
+    plt.ylabel("Fourier transform")
+    plt.gca().set_xlim([-3, 3])
 
-        n2f_obj = sim.add_near2far(
-            fcen, 0, 1, mp.Near2FarRegion(center=mon_pt, size=mp.Vector3(y=sy))
-        )
-
-        sim.run(until_after_sources=500)
-
-        return (
-            abs(
-                sim.get_farfields(
-                    n2f_obj,
-                    ff_res,
-                    center=mp.Vector3(-0.5 * sx + dpml + dsub + gh + focal_length),
-                    size=mp.Vector3(spot_length),
-                )["Ez"]
-            )
-            ** 2
-        )
-
-
-gp = 0.3  # grating periodicity
-gh = 1.8  # grating height
-gdc = np.linspace(0.1, 0.9, 30)  # grating duty cycle
-
-mode_tran = np.empty(gdc.size)
-mode_phase = np.empty(gdc.size)
-for n in range(gdc.size):
-    mode_tran[n], mode_phase[n] = grating(gp, gh, [gdc[n]])
-
-plt.figure(dpi=200)
-plt.subplot(1, 2, 1)
-plt.plot(gdc, mode_tran, "bo-")
-plt.xlim(gdc[0], gdc[-1])
-plt.xticks(list(np.linspace(0.1, 0.9, 5)))
-plt.xlabel("grating duty cycle")
-plt.ylim(0.96, 1.00)
-plt.yticks(list(np.linspace(0.96, 1.00, 5)))
-plt.title("transmittance")
-
-plt.subplot(1, 2, 2)
-plt.plot(gdc, mode_phase, "rs-")
-plt.grid(True)
-plt.xlim(gdc[0], gdc[-1])
-plt.xticks(list(np.linspace(0.1, 0.9, 5)))
-plt.xlabel("grating duty cycle")
-plt.ylim(-2 * np.pi, 0)
-plt.yticks(list(np.linspace(-6, 0, 7)))
-plt.title("phase (radians)")
-
-plt.tight_layout(pad=0.5)
-plt.show()
-
-gdc_new = np.linspace(0.16, 0.65, 500)
-mode_phase_interp = np.interp(gdc_new, gdc, mode_phase)
-print(f"phase-range:, {mode_phase_interp.max() - mode_phase_interp.min():.6f}")
-
-phase_tol = 1e-2
-num_cells = [100, 200, 400]
-ff_nc = np.empty((spot_length * ff_res, len(num_cells)))
-
-for k in range(len(num_cells)):
-    gdc_list = []
-    for j in range(-num_cells[k], num_cells[k] + 1):
-        phase_local = (
-            2
-            * np.pi
-            / lcen
-            * (focal_length - ((j * gp) ** 2 + focal_length**2) ** 0.5)
-        )  # local phase at the center of the j'th unit cell
-        phase_mod = phase_local % (-2 * np.pi)  # restrict phase to [-2*pi,0]
-        if phase_mod > mode_phase_interp.max():
-            phase_mod = mode_phase_interp.max()
-        if phase_mod < mode_phase_interp.min():
-            phase_mod = mode_phase_interp.min()
-        idx = np.transpose(
-            np.nonzero(
-                np.logical_and(
-                    mode_phase_interp > phase_mod - phase_tol,
-                    mode_phase_interp < phase_mod + phase_tol,
-                )
-            )
-        )
-        gdc_list.append(gdc_new[idx[0][0]])
-
-    ff_nc[:, k] = grating(gp, gh, gdc_list)
-
-x = np.linspace(
-    focal_length - 0.5 * spot_length,
-    focal_length + 0.5 * spot_length,
-    ff_res * spot_length,
-)
-plt.figure(dpi=200)
-plt.semilogy(x, abs(ff_nc[:, 0]) ** 2, "bo-", label=f"num_cells = {2*num_cells[0] + 1}")
-plt.semilogy(x, abs(ff_nc[:, 1]) ** 2, "ro-", label=f"num_cells = {2*num_cells[1] + 1}")
-plt.semilogy(x, abs(ff_nc[:, 2]) ** 2, "go-", label=f"num_cells = {2*num_cells[2] + 1}")
-plt.xlabel("x coordinate (μm)")
-plt.ylabel(r"energy density of far-field electric fields, |E$_z$|$^2$")
-plt.title("focusing properties of a binary-grating metasurface lens")
-plt.legend(loc="upper right")
-plt.tight_layout()
-plt.show()
+    plt.tight_layout(pad=1.0)
+    plt.show()
