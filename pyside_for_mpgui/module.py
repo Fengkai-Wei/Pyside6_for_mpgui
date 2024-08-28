@@ -1048,7 +1048,7 @@ class MainWindow(QMainWindow):
         # Create and add tabs
         self.tab1 = CustomListWidget(parent=self)
         self.tab2 = CustomListWidget(add_type= 'Sources', add_combo= var_dict['Sources'],parent=self)
-        self.tab3 = CustomListWidget(parent=self, add_type = 'Monitors', add_combo = var_dict['Monitors'],parents = self)
+        self.tab3 = CustomListWidget(parent=self, add_type = 'Monitors', add_combo = var_dict['Monitors'])
 
 
         self.tab_widget.addTab(self.tab1, "Structures")
