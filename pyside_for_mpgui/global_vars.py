@@ -24,7 +24,9 @@ def reload_mnt(reload_list):
 
 
 def init():
-    global var_dict
+    global var_dict, current_sim
+    current_sim = mp.Simulation(cell_size = mp.Vector3(2,2,2),resolution=50)
+
     var_dict = {
         'Material':{'c-Si':cSi,
                     'a-Si':aSi,
@@ -65,13 +67,13 @@ def init():
                     },
 
         'Structure':{
-            'Cylinder': mp.Cylinder(radius=0.5,height=1.0,material = aSi),
-            'Block': mp.Block(size=(0.2,0.2,0.2),),
-            'Sphere': mp.Sphere(radius=0.2),
-            'Wedge': mp.Wedge(radius=0.2),
-            'Cone': mp.Cone(radius=0.2),
-            'Ellipsoid': mp.Ellipsoid(size = (0.2,0.2,0.2)),
-            'Prism': mp.Prism(vertices=[mp.Vector3(-0.1,-0.1,0),mp.Vector3(-0.1,0.1,0),mp.Vector3(0.1,0.1,0),mp.Vector3(0.1,-0.1,0)], height=0.2),
+            'Cylinder': mp.Cylinder,
+            'Block': mp.Block,
+            'Sphere': mp.Sphere,
+            'Wedge': mp.Wedge,
+            'Cone': mp.Cone,
+            'Ellipsoid': mp.Ellipsoid,
+            'Prism': mp.Prism,
                      },
         'geo':{},
         'Sources':{'Continuous Source': mp.ContinuousSource,
@@ -85,7 +87,12 @@ def init():
         'CurrentSim':mp.Simulation(cell_size = mp.Vector3(2,2,2),resolution=50),
         
         'Monitors':{
-            
+            'Flux': current_sim.add_flux,
+            'Field': current_sim.add_dft_fields,
+            'Force': current_sim.add_force,
+            'Energy': current_sim.add_energy,
+            'Mode': current_sim.add_mode_monitor,
+            'Near to Far': current_sim.add_near2far,
         },
         'dft':{},
         'Frequency':1/1.55,

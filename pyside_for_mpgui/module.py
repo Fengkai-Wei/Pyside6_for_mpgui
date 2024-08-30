@@ -101,21 +101,23 @@ class CustomMsgBox(QMessageBox):
         msg_box.exec()  # Show the message box modally
 
 class AddItemDialog(QDialog):
-    def __init__(self, type ,combo_list,parent=None):
+    def __init__(self, type, parent=None):
         super().__init__(parent)
         self.parent = parent
         #self.setGeometry(100, 100, 300, 100)
-        self.combo_list = combo_list
         self.type = type
+        self.combo_list = list(var_dict[self.type].keys())
         self.setWindowTitle(f'Add {self.type}')
 
         # Create layout
-        layout = QFormLayout(self)
+
+
+        self.layout = QFormLayout(self)
 
         # Create input for name of new item
         self.name_input = QLineEdit()
         self.name_input.setText(f'New_{self.type}')
-        layout.addRow('Name:', self.name_input)
+        self.layout.addRow('Name:', self.name_input)
         self.name_input.textChanged.connect(self.on_name_changed)
 
         # Create combo box for item type
@@ -123,19 +125,81 @@ class AddItemDialog(QDialog):
         self.type_combo.addItems(self.combo_list)
         self.type_combo.setMaxVisibleItems(15)
         self.type_combo.setStyleSheet("QComboBox { combobox-popup: 0; }")
-
-        layout.addRow(f'{self.type}:',self.type_combo)
-        
         self.type_combo.currentTextChanged.connect(self.on_combo_box_changed)
 
+        self.layout.addRow(f'{self.type}:',self.type_combo)
+        self.sep = QLabel()
 
+        self.layout.addRow(self.sep)
 
+        self.layout.addRow(QLabel('Detailed Parameters:'))
+        self.target_obj = var_dict[self.type][self.type_combo.currentText()]
+        # There is a little inconsistency...
+        # Geometric Objects and Sources could be instantiated by there own class,
+        # which is a recommended method from MEEP.
+        # However, although Monitors are `DftFields` class themselves, the direct
+        # instantiation is not recommend, but by methods like `add_dft_field` etc.
+        # Thus, `target_obj` is a class if adding Structure and Sources, and a func
+        # if adding Monitors. See DetailParams for more details.
+
+        self.detail = self.DetailParams(self.type, self.target_obj,parent = self)
+        
+        self.layout.addRow(self.detail)
         # Create buttons
         self.button_box = QPushButton("OK")
         self.button_box.clicked.connect(self.check_name)
-        layout.addRow(self.button_box)
+        self.layout.addRow(self.button_box)
+        self.setLayout(self.layout)
+    class DetailParams(QWidget):
+        def __init__(self, add_type, cls_or_func, parent=None):
+            super().__init__(parent)
+            self.temp = None
+            init_dict = {
+            'height' : 0.2,
+            'radius' : 0.2,
+            'size': mp.Vector3(0.2,0.2,0.2),
+            'center': mp.Vector3(0,0,0),
+            'component': mp.Ex,
+            'frequency': 1./1.55,
+            'src_func': lambda t: np.random.randn(),
+            'vertices': [mp.Vector3(-0.1,-0.1,0),mp.Vector3(-0.1,0.1,0),mp.Vector3(0.1,0.1,0),mp.Vector3(0.1,-0.1,0)],
+            'matreial': var_dict['Material']['Vaccum'],
+            'src': None,
+            }
 
-        self.setLayout(layout)
+            #
+            layout = QFormLayout()
+            if add_type == 'Structure':
+                target_dict = var_dict['geo']
+                self.temp = self.create_instance(cls_or_func, init_dict)
+            elif add_type == 'Sources':
+                temp_srct_instance = self.create_instance(cls_or_func, init_dict)
+                init_dict['src'] = temp_srct_instance
+                target_dict = var_dict['src']
+
+                self.temp = self.create_instance(mp.Source,init_dict)
+            elif add_type == 'Monitors':
+                target_dict = var_dict['dft']
+                self.temp = cls_or_func(**init_dict)    
+            # Now `temp` are correct instantiated class(`Geometric Object`, `Source` or `DftFields`)
+            for key,val in self.temp.__dict__.items():
+
+                layout.addRow(key,QLabel(str(val.__class__)))
+
+            self.setLayout(layout)
+
+        def create_instance(self, cls, init_dict):
+
+            init_params = cls.__init__.__code__.co_varnames[1:cls.__init__.__code__.co_argcount]
+
+            init_val = {}
+            for param in init_params:
+                temp_init = init_dict.get(param)
+                if param in init_dict:
+                    init_val.update({param: temp_init})
+            return cls(**init_val)
+    
+
     def check_name(self):
         if self.name_input.text() in self.parent.print_list_items():
             self.msg =  CustomMsgBox(self)
@@ -154,7 +218,14 @@ class AddItemDialog(QDialog):
     def on_name_changed(self,new_name):
         print(f"Name input changed: {new_name}")
     def on_combo_box_changed(self, new_text):
-        print(f"Combo input changed: {new_text}")
+        print(f"Combo input changed: {new_text}, now is {var_dict[self.type][self.type_combo.currentText()]}")
+        self.target_obj = var_dict[self.type][self.type_combo.currentText()]
+        tmp = self.DetailParams(self.type, self.target_obj,parent = self)
+        
+        self.layout.replaceWidget(self.detail,tmp)
+        self.detail.deleteLater()
+        self.detail = tmp
+        
     def get_values(self):
         return {'name':self.name_input.text(),
                 'type':self.type_combo.currentText()}
@@ -271,15 +342,11 @@ class CustomEditDialog(QDialog):
 
 
 
-        print(self.target_dict == var_dict['geo'])
-
 
         
 
         self.target_dict[new_text] = self.target_dict.pop(self.item_text)
 
-
-        print(self.target_dict == var_dict['geo'])
 
         self.item_text = new_text
         print(self.item_text)
@@ -326,12 +393,11 @@ class CustomEditDialog(QDialog):
             super().accept()
 
 class CustomListWidget(QWidget):
-    def __init__(self, add_type = 'Structure', add_combo=var_dict['Structure'] ,items=None, parent=None):
+    def __init__(self, add_type = 'Structure',items=None, parent=None):
         super().__init__(parent)
         if items is None:
             items = []
         self.list_items = items
-        self.add_combo = add_combo
         self.add_type = add_type
         self.plot_list = [self.parent().plot_widget_0, self.parent().plot_widget_1, self.parent().plot_widget_2, self.parent().vispy_plot_widget]
         self.init_ui()
@@ -363,7 +429,7 @@ class CustomListWidget(QWidget):
         self.list_widget.model().rowsInserted.connect(lambda: self.print_list_items())
 
     def add_item(self):
-        dialog = AddItemDialog(type = self.add_type, combo_list = self.add_combo.keys(),parent = self)
+        dialog = AddItemDialog(type = self.add_type,parent = self)
         if dialog.exec():
             values = dialog.get_values()
             print(f"Edited values: {values}")
@@ -378,19 +444,24 @@ class CustomListWidget(QWidget):
             if self.add_type == 'Structure':
 
                 # if add Structure, then add a geometric object
-                temp_obj = copy.deepcopy(var_dict['Structure'][values['type']])
+                temp_obj_class = var_dict['Structure'][values['type']]
 
-                # always force the material is defined from var_dict['Material']
-                temp_obj.material = var_dict['Material']['Vaccum']
-                temp_obj.label = values['name']
+                temp_obj = temp_obj_class(
+                    radius = 0.2,
+                    height = 0.2,
+                    # always force the material is defined from var_dict['Material']
+                    material = var_dict['Material']['Vaccum']
+                )
+                
+                
+
                 var_dict['geo'].update({values['name']:temp_obj})
-
 
             elif self.add_type == 'Sources':
 
                 # if add Sources, then add a geometric object
                 temp_obj = var_dict['Sources'][values['type']]
-                if temp_obj == mp.source.CustomSource:
+                if temp_obj == mp.CustomSource:
                     temp_srct = temp_obj(src_func= lambda t: np.random.randn())
                 else:
                     temp_srct = temp_obj(frequency = 1/1.55)
@@ -1047,8 +1118,8 @@ class MainWindow(QMainWindow):
 
         # Create and add tabs
         self.tab1 = CustomListWidget(parent=self)
-        self.tab2 = CustomListWidget(add_type= 'Sources', add_combo= var_dict['Sources'],parent=self)
-        self.tab3 = CustomListWidget(parent=self, add_type = 'Monitors', add_combo = var_dict['Monitors'])
+        self.tab2 = CustomListWidget(add_type= 'Sources',parent=self)
+        self.tab3 = CustomListWidget(parent=self, add_type = 'Monitors')
 
 
         self.tab_widget.addTab(self.tab1, "Structures")
